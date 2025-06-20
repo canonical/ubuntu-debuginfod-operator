@@ -1,0 +1,29 @@
+# Charmcraft configuration for debuginfod.
+# See https://juju.is/docs/sdk/charmcraft-config
+
+name: debuginfod
+type: charm
+title: Charm Template
+summary: |
+  A charm for deploying debuginfod to serve debugging symbols to gdb.
+description: |
+  The **debuginfod** operator is a [charm](https://juju.is/charms-architecture) for deploying debuginfod, a service that provides ELF debugging symbols for distribution packages.
+  GDB can fetch those in a debugging session, by requesting currently needed symbols from debuginfod.
+
+bases:
+  - build-on:
+    - name: ubuntu
+      channel: "24.04"
+    run-on:
+    - name: ubuntu
+      channel: "24.04"
+
+
+# charm config options; Configure tab on Charmhub.
+# https://juju.is/docs/sdk/charmcraft-yaml#heading--config
+config:
+  options:
+
+
+# Resources tab on Charmhub.
+resources:
