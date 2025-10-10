@@ -8,3 +8,7 @@ __pycache__/
 *.py[cod]
 .idea
 .vscode/
+.mypy_cache/
+.ruff_cache/
+.envrc
+lp.cred

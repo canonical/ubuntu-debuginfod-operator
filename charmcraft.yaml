@@ -1,29 +1,95 @@
 # Charmcraft configuration for debuginfod.
 # See https://juju.is/docs/sdk/charmcraft-config
 
-name: debuginfod
+name: ubuntu-debuginfod
 type: charm
-title: Charm Template
+title: Ubuntu Debuginfod
 summary: |
-  A charm for deploying debuginfod to serve debugging symbols to gdb.
+  A charm for deploying ubuntu-debuginfod to serve Ubuntu package's debugging symbols to gdb.
 description: |
-  The **debuginfod** operator is a [charm](https://juju.is/charms-architecture) for deploying debuginfod, a service that provides ELF debugging symbols for distribution packages.
+  The **ubuntu-debuginfod** operator is a [charm](https://juju.is/charms-architecture) (written using [ops](https://documentation.ubuntu.com/ops)) for deploying [ubuntu-debuginfod](https://launchpad.net/ubuntu-debuginfod), a service that provides ELF debugging symbols for Ubuntu distribution packages.
   GDB can fetch those in a debugging session, by requesting currently needed symbols from debuginfod.
 
-bases:
-  - build-on:
-    - name: ubuntu
-      channel: "24.04"
-    run-on:
-    - name: ubuntu
-      channel: "24.04"
+platforms:
+  ubuntu@24.04:amd64:
 
+parts:
+  ubuntu-debuginfod-charm:
+    plugin: uv
+    source: .
+    build-packages:
+      - git
+    build-snaps:
+      - astral-uv
+    override-build: |
+      craftctl default
+      git describe --always > $CRAFT_PART_INSTALL/version
+
+  files:
+    plugin: dump
+    source: .
+    stage:
+      - LICENSE
+      - README.md
+      - etc/
+
+storage:
+  # where all the debug symbols are stored. ~13 TiB (at 25.04)
+  debugsyms:
+    description: debug symbol file storage
+    type: filesystem
+    #minimum-size: 20T TODO
+    location: /srv/debug-mirror/
+
+  # debuginfod's internal sqlite database, ~400GiB (at 25.04)
+  debuginfoddb:
+    description: debuginfod sqlite database storage
+    type: filesystem
+    #minimum-size: 600G TODO
+    location: /var/cache/private/debuginfod/
+
+requires:
+  # debuginfod gets requests via http
+  # https://charmhub.io/integrations/ingress
+  debuginfod-http-ingress:
+    interface: ingress
+    limit: 1
+    optional: true
 
 # charm config options; Configure tab on Charmhub.
 # https://juju.is/docs/sdk/charmcraft-yaml#heading--config
 config:
   options:
+    update_ddeb:
+      type: bool
+      description: "perform periodic debug data updates by polling launchpad"
+      default: false
+    testmode:
+      type: bool
+      description: "operate in test mode (e.g. juju integration test), so we don't process the whole archive."
+      default: false
+    lp_credentials:
+      type: secret
+      description: |
+        launchpad secret as the contents of a lp.cred file.
+        obtain with:
+          runuser -u mirror -- /usr/share/ubuntu-debuginfod/utils/obtain-launchpad-credentials.py /tmp/lp.cred
 
+        store it in juju (you'll get the secret_id):
+          juju add-secret debuginfod-launchpad cred#file=/tmp/lp.cred
+
+        and granted to the ubuntu-debuginfod application:
+          juju grant-secret debuginfod-launchpad $application
+
+        get the secret id:
+          juju secrets
+
+        and finally by setting this config option:
+          juju config $application lp_credentials=secret:$secret_id"
+
+actions:
+  update-manpages:
+    description: Update manpages from the archive
 
 # Resources tab on Charmhub.
 resources:

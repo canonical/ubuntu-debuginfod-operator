@@ -1,0 +1,22 @@
+DEBUGINFOD_PORT="8002"
+#DEBUGINFOD_VERBOSE="-vvvvv"
+
+# some common places to find trustworthy ELF/DWARF files and ddebs
+#DEBUGINFOD_PATHS="-t43200 -U /srv/mirrors/debian/debug.mirrors.debian.org/debian-debug/pool/main/a/"
+
+# -c 32: Spawn 32 processes
+# -t 3600: Rescan every 1 hour
+# -Z: Scan .ddebs, .tar.xz (source code)
+DEBUGINFOD_OPTIONS="-c 16 -t 3600 -Z.ddeb='(bsdtar -O -x -f - data.tar.*)<' -Z.deb='(bsdtar -O -x -f - data.tar.*)<' -Z.tar.xz"
+
+
+# EDIT THIS IN THE SYSTEMD SERVICE FILE
+#DEBUGINFOD_PATHS="/srv/debug-mirror/"
+
+# prefer reliability/durability over performance
+#DEBUGINFOD_PRAGMAS="-D 'pragma synchronous=full;'"
+
+# upstream debuginfods
+#DEBUGINFOD_URLS="http://secondhost:8002 http://thirdhost:8002"
+#DEBUGINFOD_TIMEOUT="5"
+#DEBUGINFOD_CACHE_DIR=""

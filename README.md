@@ -1,10 +1,21 @@
-# `debuginfod` Operator
+# `ubuntu-debuginfod` Operator
 
-Charmhub package name: `debuginfod`
-More information: https://charmhub.io/debuginfod
+Charmhub package name: `ubuntu-debuginfod`
+More information: https://charmhub.io/ubuntu-debuginfod
 
-Deploy `debuginfod` to serve debugging symbols of distribution packages to debuggers like GDB.
+Deploy `debuginfod` to serve debugging symbols of Ubuntu's distribution packages to debuggers like GDB.
 
+## About
+
+Entrypoint: [`src/charm.py`](src/charm.py).
+
+When the Charm is installed, it:
+- adds the [ubuntu-debuginfod PPA](https://launchpad.net/~ubuntu-debuginfod-devs/+archive/ubuntu/ubuntu-debuginfod)
+- installs [`ubuntu-debuginfod`](https://launchpad.net/ubuntu-debuginfod)
+- installs and sets up `systemd` services
+  - `debuginfod.service`: provides files to debuggers via http (port 8002 default)
+  - `ubuntu-debuginfod-launchpad-poller.service` & `.timer`: asks launchpad about new packages
+  - `ubuntu-debuginfod-celery.service`: processes jobs and downloads debug symbols from archive
 
 ## Other resources
 
