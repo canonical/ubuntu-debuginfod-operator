@@ -23,7 +23,7 @@ jobs:
         run: charmcraft pack -v
 
       - name: Upload charm artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@v4
         with:
           name: charm
           path: ./*.charm
@@ -47,7 +47,7 @@ jobs:
       - name: Generate matrix list
         id: charms
         run: |
-          list="$(ls *.charm | jq -r -ncR '[input]')"
+          list="$(ls *.charm | jq -Rcs 'rtrimstr("\n") | split("\n")')"
           echo "charms=$list"
           echo "charms=$list" >> $GITHUB_OUTPUT
 

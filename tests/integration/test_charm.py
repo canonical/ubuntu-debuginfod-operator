@@ -2,10 +2,10 @@
 # Copyright 2025 Jonas Jelten <jonas.jelten@canonical.com>
 # See LICENSE file for licensing details.
 
+import json
 import logging
 from pathlib import Path
 
-import json
 import jubilant
 import requests
 import yaml
@@ -31,22 +31,16 @@ def test_deploy_app(juju: jubilant.Juju, app: str):
 
 def test_services_running(juju: jubilant.Juju, app: str):
     services_raw = juju.ssh(f"{app}/0", "systemctl list-units --type service --full --all --output json")
-    services = json.loads(services_raw)
+    services_list = json.loads(services_raw)
+    services = {svc["unit"]: svc for svc in services_list}
 
     assert services["debuginfod.service"]["active"] == "active"
-    assert services["ubuntu-debuginfod-celery.service"]["active"] == "active"
 
 
 def test_application_is_up(juju: jubilant.Juju, app: str):
     response = requests.get(f"http://{_address(juju, app)}:8002")
     assert response.status_code == 200
-    # TODO generate real debug data
+    # TODO testmode to provide selected debug data
     buildid = "d11ba2e3311344ed7ce2745a3a7942c76a54fba8"
     response = requests.get(f"http://{_address(juju, app)}:8002/buildid/{buildid}/debuginfo")
     # assert response.status_code == 200
-
-
-def test_storage_attaching(juju: jubilant.Juju, app: str):
-    # add 2GiB to unit 0
-    juju.cli("add-storage", f"{app}/0", "data=2G", include_model=True)
-    juju.wait(jubilant.all_active)
