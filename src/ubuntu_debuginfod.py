@@ -142,7 +142,8 @@ class UbuntuDebuginfod:
             logger.info("launchpad secret not set yet.")
 
         # set up custom PPAs to fetch
-        # if we do anonymous login with ubuntu-debuginfod, it looks in /home/mirror/.config/ubuntu-debuginfod/ppalist instead
+        # if we do anonymous login with ubuntu-debuginfod,
+        # it looks in /home/mirror/.config/ubuntu-debuginfod/ppalist instead
         custom_private_ppas="""# private ppas to fetch debug symbols from
 ppa:ubuntu-esm/esm-infra-security
 ppa:ubuntu-esm/esm-infra-updates

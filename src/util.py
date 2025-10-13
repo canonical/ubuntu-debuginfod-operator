@@ -16,7 +16,7 @@ def run_check(cmd: str):
 
 def run_ret(cmd: str) -> int:
     """Execute a shell command and get its returncode."""
-    return subprocess.run(shlex.split(cmd)).returncode
+    return subprocess.run(shlex.split(cmd), check=False).returncode
 
 def run_out(cmd: str) -> str:
     """Execute a shell command and get its output."""
@@ -54,13 +54,11 @@ def file_ensure_content(
                     # content needs updating
                     with file_path.open("w") as hdl:
                         hdl.write(new_cfg)
-        else:
-            if current_content != content:
-                with file_path.open("w") as hdl:
-                    hdl.write(content)
-    else:
-        if mkdir:
-            file_path.parent.mkdir(parents=True, exist_ok=True)
+        elif current_content != content:
+            with file_path.open("w") as hdl:
+                hdl.write(content)
+    elif mkdir:
+        file_path.parent.mkdir(parents=True, exist_ok=True)
 
     if missing:
         # content is missing
