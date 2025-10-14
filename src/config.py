@@ -12,6 +12,11 @@ class Config(pydantic.BaseModel):
     # ops.model.Secret is not pydantic-compatible, so we can't actually nest it.
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
+    # activate ddeb fetching
     update_ddeb: bool = pydantic.Field()
+
+    # run in testmode
     testmode: bool = pydantic.Field()
-    lp_credentials: ops.model.Secret = pydantic.Field()
+
+    # launchpad secret
+    lp_credentials: ops.model.Secret | None = pydantic.Field(default=None)

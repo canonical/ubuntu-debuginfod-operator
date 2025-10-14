@@ -130,16 +130,19 @@ class UbuntuDebuginfod:
 
         # Deploy the launchpad access credentials secret file.
         lp_creds_secret = config.lp_credentials
-        try:
-            secrets = lp_creds_secret.get_content(refresh=True)
-            lp_creds = secrets["cred"]  # secret key name as set in `juju add-secret`
-            file_ensure_content(self.root_path / "home/mirror/.config/ubuntu-debuginfod/lp.cred",
-                                content=lp_creds,
-                                mkdir=True,
-                                owner="mirror")
+        if lp_creds_secret is None:
+            logger.info("launchpad secret configuration not given.")
+        else:
+            try:
+                secrets = lp_creds_secret.get_content(refresh=True)
+                lp_creds = secrets["cred"]  # secret key name as set in `juju add-secret`
+                file_ensure_content(self.root_path / "home/mirror/.config/ubuntu-debuginfod/lp.cred",
+                                    content=lp_creds,
+                                    mkdir=True,
+                                    owner="mirror")
 
-        except ops.SecretNotFoundError:
-            logger.info("launchpad secret not set yet.")
+            except ops.SecretNotFoundError:
+                logger.info("launchpad secret not set yet.")
 
         # set up custom PPAs to fetch
         # if we do anonymous login with ubuntu-debuginfod,

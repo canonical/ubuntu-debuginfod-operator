@@ -75,8 +75,18 @@ class UbuntuDebuginfodCharm(ops.CharmBase):
         self._debuginfod = Debuginfod(root)
 
     def _load_cfg(self) -> config.Config:
-        expected = config.Config.model_fields.keys()
+        expected = set(config.Config.model_fields.keys())
         given = self.config.keys()
+
+        secret_options: list[str] = []
+        for cfgkey in expected:
+            cfgmeta = self.meta.config.get(cfgkey)
+            if cfgmeta and cfgmeta.type == 'secret':
+                secret_options.append(cfgkey)
+
+        # secret options must be defaulted to None in our config.
+        expected -= set(secret_options)
+
         if expected - given:
             self.unit.status = ops.BlockedStatus(f"missing config settings: {expected - given}")
             raise Exception(f"not all required charm config values set: {expected=}, {given=}")
