@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - main
+  workflow_call:
+    secrets:
+      CHARMHUB_TOKEN:
+        required: true
 
 jobs:
   pack-charm:
@@ -66,6 +70,7 @@ jobs:
           fetch-depth: 0
 
       - name: Select charmhub channel
+        # depending on branch name, selects the channel name
         id: channel
         uses: canonical/charming-actions/channel@2.7.0
 
