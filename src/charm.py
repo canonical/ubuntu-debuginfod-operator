@@ -146,8 +146,10 @@ class UbuntuDebuginfodCharm(ops.CharmBase):
         self._check_status()
 
     def _check_status(self):
-        # check if debuginfod is running
-        if not self._ubuntu_debuginfod.is_running():
+        cfg = self._load_cfg()
+
+        # check if launchpad processing is running
+        if not cfg.testmode and not self._ubuntu_debuginfod.is_running():
             self.unit.status = ops.BlockedStatus("ubuntu-debuginfod not running")
             return
 
