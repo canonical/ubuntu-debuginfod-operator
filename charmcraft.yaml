@@ -61,11 +61,11 @@ requires:
 config:
   options:
     update_ddeb:
-      type: bool
+      type: boolean
       description: "perform periodic debug data updates by polling launchpad"
       default: false
     testmode:
-      type: bool
+      type: boolean
       description: "operate in test mode (e.g. juju integration test), so we don't process the whole archive."
       default: false
     lp_credentials:
