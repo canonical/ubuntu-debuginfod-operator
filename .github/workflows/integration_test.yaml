@@ -17,7 +17,7 @@ jobs:
         uses: canonical/setup-lxd@main
 
       - name: Install charmcraft
-        run: sudo snap install charmcraft --classic
+        run: sudo snap install --classic charmcraft
 
       - name: Install concierge
         run: sudo snap install --classic concierge
