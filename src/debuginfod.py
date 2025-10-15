@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import logging
-import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import ops
 from charmlibs import pathops
 
-from util import run_check, run_ret
+from util import file_copy, run_check, run_ret
 
 if TYPE_CHECKING:
     from ops.model import Unit
@@ -43,11 +42,11 @@ class Debuginfod:
 
         unit.status = ops.MaintenanceStatus("Setting up debuginfod...")
 
-        shutil.copy(
+        file_copy(
             basedir / "etc/debuginfod.service",
             self.root_path / "etc/systemd/system/debuginfod.service",
         )
-        shutil.copy(basedir / "etc/default-debuginfod", self.root_path / "etc/default/debuginfod")
+        file_copy(basedir / "etc/default-debuginfod", self.root_path / "etc/default/debuginfod")
 
         unit.status = ops.ActiveStatus("Ready")
 

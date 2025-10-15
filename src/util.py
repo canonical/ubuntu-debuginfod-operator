@@ -27,14 +27,15 @@ def file_ensure_content(
     content: str,
     replace: str | None = None,
     matcher: str | None = None,
-    mkdir: bool = False,
+    mkdir: bool = True,
     append_missing: bool = True,
     owner: str | None = None,
 ) -> None:
     """For the given path, ensure content is present by replacing or adding.
 
     `matcher` is a regex searching for content to be updated and replaced by `replace`.
-    when `matcher` does not match, instead append `new` to the file.
+    when `matcher` does not match, instead append/set `content` to the file
+    (configured by `append_missing`).
     """
     missing = True
     if file_path.is_file():
@@ -62,7 +63,7 @@ def file_ensure_content(
 
     if missing:
         # content is missing
-        if append_missing:
+        if file_path.is_file() and append_missing:
             with file_path.open("a") as hdl:
                 hdl.write(content)
         else:
@@ -72,3 +73,14 @@ def file_ensure_content(
     if owner is not None:
         if file_path.owner() != owner:
             shutil.chown(file_path, owner)
+
+
+def file_copy(src: pathops.Path, dest: pathops.Path, mkdirs: bool = True):
+    if not src.is_file():
+        raise ValueError(f"source file {src!r} doesn't exist")
+    if mkdirs and not dest.parent.is_dir():
+        dest.parent.mkdir(parents=True)
+    shutil.copy(
+        src,
+        dest,
+    )

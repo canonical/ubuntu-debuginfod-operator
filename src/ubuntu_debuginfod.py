@@ -35,15 +35,15 @@ class UbuntuDebuginfod:
     def _ensure_storage_layout(self, unit: Unit) -> None:
         """Make sure directories exist for debug symbol storage in /srv/debug-mirror."""
         storage_dirs = (
-            "/srv/debug-mirror/ddebs/",
-            "/srv/debug-mirror/private-ppas/",
-            "/srv/debug-mirror/ubuntu-archive-dbg/",
-            "/srv/debug-mirror/tmpdir/",
+            "srv/debug-mirror/ddebs/",
+            "srv/debug-mirror/private-ppas/",
+            "srv/debug-mirror/ubuntu-archive-dbg/",
+            "srv/debug-mirror/tmpdir/",
         )
 
         for directory in storage_dirs:
             # create directories needed for debuginfod.service ro/rw namespace.
-            os.makedirs(directory, exist_ok=True)
+            os.makedirs(self.root_path / directory, exist_ok=True)
 
         # if storage changed, but we already created the user during "install"
         try:
@@ -54,7 +54,7 @@ class UbuntuDebuginfod:
             pass
         else:
             for directory in storage_dirs:
-                shutil.chown(directory, user="mirror", group="mirror")
+                shutil.chown(self.root_path / directory, user="mirror", group="mirror")
 
     def storage_attached(self, unit: Unit) -> None:
         self._ensure_storage_layout(unit)
@@ -77,7 +77,7 @@ class UbuntuDebuginfod:
 
         # set rabbitmq: consumer_timeout = 10800000
         # because ubuntu-debuginfod/README says so.
-        rabbit_cfg_path = self.root_path / "/etc/rabbitmq/rabbitmq.conf"
+        rabbit_cfg_path = self.root_path / "etc/rabbitmq/rabbitmq.conf"
         file_ensure_content(rabbit_cfg_path,
                             matcher=r"^(\s*consumer_timeout)\s*=(.*?)$",
                             replace=r"\g<1> = 10800000",
@@ -117,7 +117,7 @@ class UbuntuDebuginfod:
             ret = subprocess.run(["patch", "-d/", "-N", "-p1", "-r-"],
                                  capture_output=True, input=celery_patch_data, check=False)
             if ret.returncode != 0:
-                # thank you "patch" for not providing a way to detect already-applied patches.
+                # thank you "patch" for not providing a return code to detect already-applied patches.
                 if b"previously applied" not in ret.stdout:
                     raise Exception("couldn't apply celery's tzdata removal patch")
 
@@ -154,7 +154,7 @@ ppa:ubuntu-esm/esm-apps-security
 ppa:ubuntu-esm/esm-apps-updates
 ppa:ubuntu-advantage/realtime-updates
 """
-        file_ensure_content(self.root_path / "/home/mirror/.config/ubuntu-debuginfod/ppalist-private",
+        file_ensure_content(self.root_path / "home/mirror/.config/ubuntu-debuginfod/ppalist-private",
                             content=custom_private_ppas,
                             mkdir=True,
                             owner="mirror")

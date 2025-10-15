@@ -34,6 +34,8 @@ to debuggers (e.g. GDB) run by on distro users.
 from __future__ import annotations
 
 import logging
+import os
+from pathlib import Path
 
 import ops
 from charmlibs import pathops
@@ -59,7 +61,11 @@ class UbuntuDebuginfodCharm(ops.CharmBase):
         super().__init__(framework)
         logger.info("creating charm instance...")
 
-        root = pathops.LocalPath('/')
+        # so we can test in a tmp dir.
+        if raw_root := os.environ.get("JUJU_CHARM_PREFIX"):
+            root = Path(raw_root)
+        else:
+            root = pathops.LocalPath('/')
 
         # executed in this order after installation/upgrade
         framework.observe(self.on.install, self._on_install)
