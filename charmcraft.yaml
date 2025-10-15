@@ -90,6 +90,3 @@ config:
 actions:
   update-manpages:
     description: Update manpages from the archive
-
-# Resources tab on Charmhub.
-resources:
