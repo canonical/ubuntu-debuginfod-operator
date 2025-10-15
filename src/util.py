@@ -44,7 +44,7 @@ def file_ensure_content(
 
         if matcher is not None:
             if replace is None:
-                raise Exception("when there's a matcher, you need to set replace.")
+                raise ValueError("when there's a matcher, you need to set replace.")
             find = re.compile(matcher)
 
             if find.match(current_content):
@@ -55,15 +55,18 @@ def file_ensure_content(
                     # content needs updating
                     with file_path.open("w") as hdl:
                         hdl.write(new_cfg)
-        elif current_content != content:
-            with file_path.open("w") as hdl:
-                hdl.write(content)
-    elif mkdir:
-        file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        elif current_content == content:
+            missing = False
+
+    else:
+        if mkdir:
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+        append_missing = False
 
     if missing:
         # content is missing
-        if file_path.is_file() and append_missing:
+        if append_missing and file_path.is_file():
             with file_path.open("a") as hdl:
                 hdl.write(content)
         else:
