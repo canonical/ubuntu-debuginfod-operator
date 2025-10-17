@@ -67,6 +67,11 @@ class UbuntuDebuginfodCharm(ops.CharmBase):
         else:
             root = pathops.LocalPath('/')
 
+        if http_proxy := os.environ.get("JUJU_CHARM_HTTP_PROXY"):
+            os.environ["http_proxy"] = http_proxy
+        if https_proxy := os.environ.get("JUJU_CHARM_HTTPS_PROXY"):
+            os.environ["https_proxy"] = https_proxy
+
         # executed in this order after installation/upgrade
         framework.observe(self.on.install, self._on_install)
         framework.observe(self.on.upgrade_charm, self._on_upgrade)
