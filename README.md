@@ -1,9 +1,9 @@
 # `ubuntu-debuginfod` Operator
 
-Charmhub package name: `ubuntu-debuginfod`
-More information: https://charmhub.io/ubuntu-debuginfod
+Charmhub package: [`ubuntu-debuginfod`](https://charmhub.io/ubuntu-debuginfod)
 
-Deploy `debuginfod` to serve debugging symbols of Ubuntu's distribution packages to debuggers like GDB.
+Deploy `ubuntu-debuginfod` and `debuginfod` to serve debugging symbols of Ubuntu's distribution packages to debuggers like GDB.
+
 
 ## About
 
@@ -19,10 +19,9 @@ When the Charm is installed, it:
 
 ## Other resources
 
+- [documentation](doc/README.md)
 - [debuginfod upstream](https://sourceware.org/elfutils/Debuginfod.html)
-
 - [Contributing](doc/contributing.md)
-
 - See the [Juju SDK documentation](https://juju.is/docs/sdk) for more information about developing and improving charms.
 
 
@@ -33,7 +32,7 @@ We use some GitHub actions to test and release the charm code.
 To retrieve the needed "`CHARMHUB_TOKEN`" for authentication (used by charmcraft via env [`CHARMCRAFT_AUTH`](https://documentation.ubuntu.com/charmcraft/latest/howto/manage-the-current-charmhub-user/#remote-environments), run:
 
 ```console
-charmcraft login --export /tmp/charmcreds.auth --charm ubuntu-debuginfod --permission=package-manage-releases --permission=package-manage-revisions --channel=edge --ttl $((10 * 365 * 24 * 60 * 60))
+charmcraft login --export /tmp/charmcreds.auth --charm ubuntu-debuginfod --permission=package-view --permission=package-manage-releases --permission=package-manage-revisions --channel=edge --ttl $((10 * 365 * 24 * 60 * 60))
 ```
 
 Store the exported output text as a GitHub project secret under `CHARMHUB_TOKEN` (because that name is hardcoded in several "included" workflows).

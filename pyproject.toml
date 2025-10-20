@@ -21,6 +21,11 @@ dev = [
     "ruff",
 ]
 
+# charms are no real python module
+#[build-system]
+#requires = ["uv_build<0.10.0"]
+#build-backend = "uv_build"
+
 # Testing tools configuration
 [tool.pytest.ini_options]
 minversion = "6.0"

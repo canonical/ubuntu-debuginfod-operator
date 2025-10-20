@@ -38,14 +38,14 @@ storage:
   debugsyms:
     description: debug symbol file storage
     type: filesystem
-    #minimum-size: 20T TODO
+    #minimum-size: 20T ?
     location: /srv/debug-mirror/
 
   # debuginfod's internal sqlite database, ~400GiB (at 25.04)
   debuginfoddb:
     description: debuginfod sqlite database storage
     type: filesystem
-    #minimum-size: 600G TODO
+    #minimum-size: 600G ?
     location: /var/cache/private/debuginfod/
 
 requires:
@@ -55,6 +55,9 @@ requires:
     interface: ingress
     limit: 1
     optional: true
+
+links:
+  documentation: https://github.com/canonical/ubuntu-debuginfod-operator/blob/main/doc/README.md
 
 # charm config options; Configure tab on Charmhub.
 # https://juju.is/docs/sdk/charmcraft-yaml#heading--config
@@ -85,7 +88,7 @@ config:
           juju secrets
 
         and finally by setting this config option:
-          juju config $application lp_credentials=secret:$secret_id"
+          juju config $application lp_credentials=secret:$secret_id
 
 actions:
   update-manpages:
