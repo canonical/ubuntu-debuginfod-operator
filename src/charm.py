@@ -77,6 +77,7 @@ class UbuntuDebuginfodCharm(ops.CharmBase):
         framework.observe(self.on.upgrade_charm, self._on_upgrade)
         framework.observe(self.on.config_changed, self._on_config_changed)
         framework.observe(self.on.start, self._on_start)
+        framework.observe(self.on.stop, self._on_stop)
         framework.observe(self.on.update_status, self._on_update_status)
         framework.observe(self.on.debugsyms_storage_attached, self._on_debugsyms_storage_attached)
         framework.observe(self.on.debuginfoddb_storage_attached,
@@ -136,6 +137,9 @@ class UbuntuDebuginfodCharm(ops.CharmBase):
     def _on_start(self, event: ops.StartEvent):
         self._start()
 
+    def _on_stop(self, event: ops.StopEvent):
+        self._stop()
+
     def _on_update_status(self, event: ops.UpdateStatusEvent):
         self._check_status()
 
@@ -155,6 +159,14 @@ class UbuntuDebuginfodCharm(ops.CharmBase):
         self._debuginfod.restart(cfg)
         self.unit.status = ops.ActiveStatus()
         self._check_status()
+
+    def _stop(self) -> None:
+        cfg = self._load_cfg()
+        logger.info("stopping charm...")
+        self.unit.status = ops.WaitingStatus("stopping services...")
+        self._ubuntu_debuginfod.stop(self.unit, cfg)
+        self._debuginfod.stop(cfg)
+        self.unit.status = ops.BlockedStatus("service stopped")
 
     def _check_status(self):
         cfg = self._load_cfg()

@@ -57,5 +57,8 @@ class Debuginfod:
         run_check("systemctl enable debuginfod.service")
         run_check("systemctl restart debuginfod.service")
 
+    def stop(self, config: Config) -> None:
+        run_check("systemctl disable --now debuginfod.service")
+
     def is_running(self) -> bool:
         return 0 == run_ret("systemctl is-active debuginfod.service")
