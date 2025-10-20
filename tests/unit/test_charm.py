@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from ops.testing import ActiveStatus, Context, State
+from ops.testing import ActiveStatus, BlockedStatus, Context, State
 
 from charm import UbuntuDebuginfodCharm
 
@@ -19,7 +19,11 @@ from util import file_ensure_content
 @pytest.fixture
 def ctx() -> Context:
     """Create a standard context for the charm."""
-    return Context(UbuntuDebuginfodCharm)
+    return Context(
+        UbuntuDebuginfodCharm,
+        # TODO: get config (& meta, actions) from parsed charmcraft.yaml
+        # just config overrides doesn't seem possible.
+    )
 
 @pytest.fixture
 def base_state(ctx) -> State:
@@ -44,7 +48,7 @@ def test_install_success(
     # allow infinite calls
     fake_process.keep_last_process(True)
 
-    # custom env var so signal testing environment basedir
+    # custom env var to signal testing environment basedir
     os.environ["JUJU_CHARM_PREFIX"] = str(tmp_path)
 
     # run juju install hook
@@ -54,13 +58,80 @@ def test_install_success(
 
     installed_packages = [
         "debuginfod",
-        "ubuntu-debuginfod"
+        "ubuntu-debuginfod",
     ]
     for pkg in installed_packages:
         assert fake_process.call_count(["apt", "install", "-y", fake_process.any(), pkg]) == 1
 
     assert fake_process.call_count(["add-apt-repository", "-y",
                                     fake_process.any(), "ppa:ubuntu-debuginfod-devs/ubuntu-debuginfod"]) == 1
+
+def test_start_success(
+    fake_process,  # fixture from pytest-process
+    ctx,
+    base_state,
+    tmp_path,
+):
+    """
+    Test successful start.
+    """
+
+    # any command can be called
+    fake_process.register([fake_process.any()])
+    # allow infinite calls
+    fake_process.keep_last_process(True)
+
+    # custom env var to signal testing environment basedir
+    os.environ["JUJU_CHARM_PREFIX"] = str(tmp_path)
+
+    # run juju install hook
+    out = ctx.run(ctx.on.start(), base_state)
+
+    assert isinstance(out.unit_status, ActiveStatus)
+
+    started_services = [
+        "debuginfod.service",
+        "ubuntu-debuginfod-celery.service",
+        "ubuntu-debuginfod-launchpad-cleaner.service",
+        "ubuntu-debuginfod-launchpad-cleaner.timer",
+    ]
+    for pkg in started_services:
+        assert fake_process.call_count(["systemctl", "restart", fake_process.any(), pkg]) == 1
+
+
+def test_stop_success(
+    fake_process,  # fixture from pytest-process
+    ctx,
+    base_state,
+    tmp_path,
+):
+    """
+    Test successful stop.
+    """
+
+    # any command can be called
+    fake_process.register([fake_process.any()])
+    # allow infinite calls
+    fake_process.keep_last_process(True)
+
+    # custom env var to signal testing environment basedir
+    os.environ["JUJU_CHARM_PREFIX"] = str(tmp_path)
+
+    # run juju install hook
+    out = ctx.run(ctx.on.stop(), base_state)
+
+    assert isinstance(out.unit_status, BlockedStatus)
+
+    stopped_services = [
+        "debuginfod.service",
+        "ubuntu-debuginfod-celery.service",
+        "ubuntu-debuginfod-launchpad-cleaner.timer",
+        "ubuntu-debuginfod-launchpad-cleaner.service",
+        "ubuntu-debuginfod-launchpad-poller.timer",
+        "ubuntu-debuginfod-launchpad-poller.service",
+    ]
+    for pkg in stopped_services:
+        assert fake_process.call_count(["systemctl", "disable", "--now", fake_process.any(), pkg]) == 1
 
 
 def test_create_new_file_with_content(tmp_path: Path):
