@@ -32,7 +32,7 @@ We use some GitHub actions to test and release the charm code.
 To retrieve the needed "`CHARMHUB_TOKEN`" for authentication (used by charmcraft via env [`CHARMCRAFT_AUTH`](https://documentation.ubuntu.com/charmcraft/latest/howto/manage-the-current-charmhub-user/#remote-environments)), run:
 
 ```console
-charmcraft login --export /tmp/charmcreds.auth --charm ubuntu-debuginfod --permission=package-view --permission=package-manage --ttl $((10 * 365 * 24 * 60 * 60))
+charmcraft login --export /tmp/charmcreds.auth --charm ubuntu-debuginfod --permission=package-view --permission=package-manage-revisions --permission=package-manage-releases --channel "latest/edge" --channel "latest/stable" --ttl $((10 * 365 * 24 * 60 * 60))
 ```
 
 Store the exported output text as a GitHub project secret under `CHARMHUB_TOKEN` (because that name is hardcoded in several "included" workflows).
