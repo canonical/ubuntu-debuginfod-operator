@@ -58,6 +58,7 @@ requires:
 
 links:
   documentation: https://github.com/canonical/ubuntu-debuginfod-operator/blob/main/doc/README.md
+  source: https://github.com/canonical/ubuntu-debuginfod-operator
 
 # charm config options; Configure tab on Charmhub.
 # https://juju.is/docs/sdk/charmcraft-yaml#heading--config
