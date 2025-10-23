@@ -90,7 +90,3 @@ config:
 
         and finally by setting this config option:
           juju config $application lp_credentials=secret:$secret_id
-
-actions:
-  update-manpages:
-    description: Update manpages from the archive
