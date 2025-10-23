@@ -19,16 +19,7 @@ from util import file_ensure_content
 @pytest.fixture
 def ctx() -> Context:
     """Create a standard context for the charm."""
-    return Context(
-        UbuntuDebuginfodCharm,
-        # TODO: get config (& meta, actions) from parsed charmcraft.yaml
-        # just config overrides doesn't seem possible.
-    )
-
-@pytest.fixture
-def base_state(ctx) -> State:
-    """Create a base state for the charm."""
-    return State(leader=True)
+    return Context(UbuntuDebuginfodCharm)
 
 
 @patch("os.chown")
@@ -36,7 +27,6 @@ def test_install_success(
     mock_os_chown,
     fake_process,  # fixture from pytest-process
     ctx,
-    base_state,
     tmp_path,
 ):
     """
@@ -52,7 +42,8 @@ def test_install_success(
     os.environ["JUJU_CHARM_PREFIX"] = str(tmp_path)
 
     # run juju install hook
-    out = ctx.run(ctx.on.install(), base_state)
+    state = State(leader=True)
+    out = ctx.run(ctx.on.install(), state)
 
     assert isinstance(out.unit_status, ActiveStatus)
 
@@ -69,12 +60,12 @@ def test_install_success(
 def test_start_success(
     fake_process,  # fixture from pytest-process
     ctx,
-    base_state,
     tmp_path,
 ):
     """
     Test successful start.
     """
+    state = State(leader=True, config = {"update_ddeb": True})
 
     # any command can be called
     fake_process.register([fake_process.any()])
@@ -85,7 +76,7 @@ def test_start_success(
     os.environ["JUJU_CHARM_PREFIX"] = str(tmp_path)
 
     # run juju install hook
-    out = ctx.run(ctx.on.start(), base_state)
+    out = ctx.run(ctx.on.start(), state)
 
     assert isinstance(out.unit_status, ActiveStatus)
 
@@ -94,6 +85,8 @@ def test_start_success(
         "ubuntu-debuginfod-celery.service",
         "ubuntu-debuginfod-launchpad-cleaner.service",
         "ubuntu-debuginfod-launchpad-cleaner.timer",
+        "ubuntu-debuginfod-launchpad-poller.service",
+        "ubuntu-debuginfod-launchpad-poller.timer",
     ]
     for pkg in started_services:
         assert fake_process.call_count(["systemctl", "restart", fake_process.any(), pkg]) == 1
@@ -102,7 +95,6 @@ def test_start_success(
 def test_stop_success(
     fake_process,  # fixture from pytest-process
     ctx,
-    base_state,
     tmp_path,
 ):
     """
@@ -118,7 +110,8 @@ def test_stop_success(
     os.environ["JUJU_CHARM_PREFIX"] = str(tmp_path)
 
     # run juju install hook
-    out = ctx.run(ctx.on.stop(), base_state)
+    state = State(leader=True, config = {"update_ddeb": True})
+    out = ctx.run(ctx.on.stop(), state)
 
     assert isinstance(out.unit_status, BlockedStatus)
 

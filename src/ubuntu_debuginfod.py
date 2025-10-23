@@ -183,8 +183,8 @@ ppa:ubuntu-advantage/realtime-updates
         #   this is services/launchpad-poller.py
         run_check("systemctl enable ubuntu-debuginfod-launchpad-poller.timer")
         run_check("systemctl restart ubuntu-debuginfod-launchpad-poller.timer")
-        # TODO if needed, initial polling:
-        # run_check("systemctl restart ubuntu-debuginfod-launchpad-poller.service")
+        # initial polling
+        run_check("systemctl restart ubuntu-debuginfod-launchpad-poller.service")
 
     def stop(self, unit: Unit, config: Config) -> None:
         run_check("systemctl disable --now ubuntu-debuginfod-launchpad-poller.timer")
