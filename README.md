@@ -9,7 +9,7 @@ Deploy `ubuntu-debuginfod` and `debuginfod` to serve debugging symbols of Ubuntu
 
 Entrypoint: [`src/charm.py`](src/charm.py).
 
-When the Charm is installed, it:
+When the [Charm](https://juju.is/charms-architecture) is installed, it:
 - adds the [ubuntu-debuginfod PPA](https://launchpad.net/~ubuntu-debuginfod-devs/+archive/ubuntu/ubuntu-debuginfod)
 - installs [`ubuntu-debuginfod`](https://launchpad.net/ubuntu-debuginfod)
 - installs and sets up `systemd` services
@@ -36,3 +36,29 @@ charmcraft login --export /tmp/charmcreds.auth --charm ubuntu-debuginfod --permi
 ```
 
 Store the exported output text as a GitHub project secret under `CHARMHUB_TOKEN` (because that name is hardcoded in several "included" workflows).
+
+
+## Ingress integration
+
+To integrate into enterprise-style infrastructure landscapes, this charm provides the `debuginfod-http-ingress` relation (interface: `ingress`).
+This allows dynamically routing traffic via proxies to the `debuginfod` service.
+
+In production, this is typically wired through an ingress provider chain (for example `ingress-configurator` -> offered machine-ingress).
+
+To test locally with a simple ingress provider:
+
+``` console
+% charmcraft pack
+% juju deploy ./ubuntu-debuginfod_*.charm ubuntu-debuginfod --config testmode=true
+
+% juju deploy haproxy --channel 2.8/edge --config external-hostname=debuginfod.internal
+% juju deploy self-signed-certificates --channel 1/edge
+
+# ingress relation (auto-matched by ingress interface)
+% juju integrate ubuntu-debuginfod haproxy
+
+# proxy relay test for debuginfod API path
+# unknown build IDs are fine for smoke tests; you still validate routing/path handling
+% curl -i -k -H "Host: debuginfod.internal" \
+  "http://<haproxy-ip>/<model-name>-ubuntu-debuginfod/buildid/0000000000000000000000000000000000000000/debuginfo"
+```

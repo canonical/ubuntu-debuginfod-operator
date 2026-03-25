@@ -18,5 +18,8 @@ class Config(pydantic.BaseModel):
     # run in testmode
     testmode: bool = pydantic.Field()
 
+    # use nginx reverse proxy
+    use_reverse_proxy: bool = pydantic.Field()
+
     # launchpad secret
     lp_credentials: ops.model.Secret | None = pydantic.Field(default=None)

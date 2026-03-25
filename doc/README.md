@@ -37,4 +37,4 @@ Please see the [Juju SDK docs](https://juju.is/docs/sdk) for guidelines on enhan
 
 ## License
 
-git-ubuntu-operator is free software, distributed under the Apache Software License, version 2.0. See [LICENSE](https://github.com/canonical/git-ubuntu-operator/blob/main/LICENSE) for more information.
+ubuntu-debuginfod-operator is free software, distributed under the GNU GPLv3. See [LICENSE](../LICENSE) for more information.

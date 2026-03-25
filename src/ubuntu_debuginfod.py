@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import ops
-from charmlibs import pathops
 
 from util import file_ensure_content, run_check, run_out, run_ret
 
@@ -29,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 class UbuntuDebuginfod:
     """Service for ubuntu-debuginfod."""
-    def __init__(self, root_path: pathops.LocalPath) -> None:
+    def __init__(self, root_path: Path) -> None:
         self.root_path = root_path
 
     def _ensure_storage_layout(self, unit: Unit) -> None:

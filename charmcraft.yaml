@@ -72,6 +72,10 @@ config:
       type: boolean
       description: "operate in test mode (e.g. juju integration test), so we don't process the whole archive."
       default: false
+    use_reverse_proxy:
+      type: boolean
+      description: "use nginx reverse proxy on port 80 in front of debuginfod (port 8002). When false, debuginfod is directly exposed."
+      default: false
     lp_credentials:
       type: secret
       description: |

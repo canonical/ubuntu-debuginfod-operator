@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 class Debuginfod:
     """Service for debuginfod."""
 
-    def __init__(self, root_path: pathops.LocalPath) -> None:
+    def __init__(self, root_path: Path) -> None:
         self.root_path = root_path
 
     def storage_attached(self, unit: Unit) -> None:
