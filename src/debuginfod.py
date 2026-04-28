@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import ops
-from charmlibs import pathops
 
 from util import file_copy, run_check, run_ret
 

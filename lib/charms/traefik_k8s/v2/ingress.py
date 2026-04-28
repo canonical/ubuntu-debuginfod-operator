@@ -97,12 +97,12 @@ log = logging.getLogger(__name__)
 BUILTIN_JUJU_KEYS = {"ingress-address", "private-address", "egress-subnets"}
 
 PYDANTIC_IS_V1 = int(pydantic.version.VERSION.split(".")[0]) < 2
-if PYDANTIC_IS_V1:  # noqa
+if PYDANTIC_IS_V1:
     from pydantic import validator
 
     input_validator = partial(validator, pre=True)
 
-    class DatabagModel(BaseModel):  # type: ignore
+    class DatabagModel(BaseModel):
         """Base databag model."""
 
         class Config:
@@ -126,7 +126,7 @@ if PYDANTIC_IS_V1:  # noqa
                     k: json.loads(v)
                     for k, v in databag.items()
                     # Don't attempt to parse model-external values
-                    if k in {f.alias for f in cls.__fields__.values()}  # type: ignore
+                    if k in {f.alias for f in cls.__fields__.values()}
                 }
             except json.JSONDecodeError as e:
                 msg = f"invalid databag contents: expecting json. {databag}"
@@ -156,7 +156,7 @@ if PYDANTIC_IS_V1:  # noqa
                 databag[self._NEST_UNDER] = self.json(by_alias=True, exclude_defaults=True)
                 return databag
 
-            for key, value in self.dict(by_alias=True, exclude_defaults=True).items():  # type: ignore  # noqa
+            for key, value in self.dict(by_alias=True, exclude_defaults=True).items():  # type: ignore
                 databag[key] = json.dumps(value)
 
             return databag
@@ -164,9 +164,9 @@ if PYDANTIC_IS_V1:  # noqa
 else:
     from pydantic import ConfigDict, field_validator
 
-    input_validator = partial(field_validator, mode="before")  # type: ignore
+    input_validator = partial(field_validator, mode="before")
 
-    class DatabagModel(BaseModel):  # type: ignore
+    class DatabagModel(BaseModel):
         """Base databag model."""
 
         model_config = ConfigDict(
@@ -177,7 +177,7 @@ else:
             # Custom config key: whether to nest the whole datastructure (as json)
             # under a field or spread it out at the toplevel.
             _NEST_UNDER=None,
-        )  # type: ignore
+        )
         """Pydantic config."""
 
         # Annotating -> "DatabagModel" as the return type here doesn't sit well with pyright
@@ -187,14 +187,14 @@ else:
             """Load this model from a Juju databag."""
             nest_under = cls.model_config.get("_NEST_UNDER")
             if nest_under:
-                return cls.model_validate(json.loads(databag[nest_under]))  # type: ignore
+                return cls.model_validate(json.loads(databag[nest_under]))
 
             try:
                 data = {
                     k: json.loads(v)
                     for k, v in databag.items()
                     # Don't attempt to parse model-external values
-                    if k in {(f.alias or n) for n, f in cls.model_fields.items()}  # type: ignore
+                    if k in {(f.alias or n) for n, f in cls.model_fields.items()}
                 }
             except json.JSONDecodeError as e:
                 msg = f"invalid databag contents: expecting json. {databag}"
@@ -202,7 +202,7 @@ else:
                 raise DataValidationError(msg) from e
 
             try:
-                return cls.model_validate_json(json.dumps(data))  # type: ignore
+                return cls.model_validate_json(json.dumps(data))
             except pydantic.ValidationError as e:
                 msg = f"failed to validate databag: {databag}"
                 log.debug(msg, exc_info=True)
@@ -221,7 +221,7 @@ else:
                 databag = {}
             nest_under = self.model_config.get("_NEST_UNDER")
             if nest_under:
-                databag[nest_under] = self.model_dump_json(  # type: ignore
+                databag[nest_under] = self.model_dump_json(
                     by_alias=True,
                     # skip keys whose values are default
                     exclude_defaults=True,
@@ -231,7 +231,7 @@ else:
             dct = self.model_dump(
                 mode="json",
                 by_alias=True,
-                exclude_defaults=True,  # type: ignore
+                exclude_defaults=True,
             )
             databag.update({k: json.dumps(v) for k, v in dct.items()})
             return databag
@@ -390,8 +390,8 @@ class _IngressPerAppBase(Object):
         observe(rel_events.relation_changed, self._handle_relation)
         observe(rel_events.relation_departed, self._handle_relation)
         observe(rel_events.relation_broken, self._handle_relation_broken)
-        observe(charm.on.leader_elected, self._handle_upgrade_or_leader)  # type: ignore
-        observe(charm.on.upgrade_charm, self._handle_upgrade_or_leader)  # type: ignore
+        observe(charm.on.leader_elected, self._handle_upgrade_or_leader)
+        observe(charm.on.upgrade_charm, self._handle_upgrade_or_leader)
 
     @property
     def relations(self) -> List[Relation]:
@@ -416,10 +416,10 @@ class _IPAEvent(RelationEvent):
     __optional_kwargs__: Dict[str, Any] = {}
 
     @classmethod
-    def __attrs__(cls):  # type: ignore
+    def __attrs__(cls):
         return cls.__args__ + tuple(cls.__optional_kwargs__.keys())
 
-    def __init__(self, handle, relation, *args, **kwargs):  # type: ignore
+    def __init__(self, handle, relation, *args, **kwargs):
         super().__init__(handle, relation)
 
         if not len(self.__args__) == len(args):
@@ -493,7 +493,7 @@ class IngressRequirerData:
 class IngressPerAppProvider(_IngressPerAppBase):
     """Implementation of the provider of ingress."""
 
-    on = IngressPerAppProviderEvents()  # type: ignore
+    on = IngressPerAppProviderEvents()
 
     def __init__(
         self,
@@ -514,7 +514,7 @@ class IngressPerAppProvider(_IngressPerAppBase):
         # notify listeners.
         if self.is_ready(event.relation):
             data = self.get_data(event.relation)
-            self.on.data_provided.emit(  # type: ignore
+            self.on.data_provided.emit(
                 event.relation,
                 data.app.name,
                 data.app.model,
@@ -527,7 +527,7 @@ class IngressPerAppProvider(_IngressPerAppBase):
             )
 
     def _handle_relation_broken(self, event: RelationEvent) -> None:
-        self.on.data_removed.emit(event.relation, event.relation.app)  # type: ignore
+        self.on.data_removed.emit(event.relation, event.relation.app)
 
     def wipe_ingress_data(self, relation: Relation) -> None:
         """Clear ingress data from relation."""
@@ -612,7 +612,7 @@ class IngressPerAppProvider(_IngressPerAppBase):
         """Publish to the app databag the ingress url."""
         ingress_url = {"url": url}
         try:
-            IngressProviderAppData(ingress=ingress_url).dump(relation.data[self.app])  # type: ignore
+            IngressProviderAppData(ingress=ingress_url).dump(relation.data[self.app])
             self.on.endpoints_updated.emit(relation=relation, app=relation.app)
         except pydantic.ValidationError as e:
             # If we cannot validate the url as valid, publish an empty databag and log the error.
@@ -624,7 +624,7 @@ class IngressPerAppProvider(_IngressPerAppBase):
                     "charm calling this library."
                 )
             )
-            IngressProviderAppData(ingress=None).dump(relation.data[self.app])  # type: ignore
+            IngressProviderAppData(ingress=None).dump(relation.data[self.app])
 
     @property
     def proxied_endpoints(self) -> Dict[str, Dict[str, str]]:
@@ -697,7 +697,7 @@ class IngressPerAppRequirerEvents(ObjectEvents):
 class IngressPerAppRequirer(_IngressPerAppBase):
     """Implementation of the requirer of the ingress relation."""
 
-    on = IngressPerAppRequirerEvents()  # type: ignore
+    on = IngressPerAppRequirerEvents()
 
     # used to prevent spurious urls to be sent out if the event we're currently
     # handling is a relation-broken one.
@@ -767,7 +767,7 @@ class IngressPerAppRequirer(_IngressPerAppBase):
         self._redirect_https = redirect_https
         self._get_scheme = scheme if callable(scheme) else lambda: scheme
 
-        self._stored.set_default(current_url=None)  # type: ignore
+        self._stored.set_default(current_url=None)
 
         # if instantiated with a port, and we are related, then
         # we immediately publish our ingress data  to speed up the process.
@@ -786,13 +786,13 @@ class IngressPerAppRequirer(_IngressPerAppBase):
                 if isinstance(event, RelationBrokenEvent)
                 else self._get_url_from_relation_data()
             )
-            if self._stored.current_url != new_url:  # type: ignore
-                self._stored.current_url = new_url  # type: ignore
-                self.on.ready.emit(event.relation, new_url)  # type: ignore
+            if self._stored.current_url != new_url:
+                self._stored.current_url = new_url
+                self.on.ready.emit(event.relation, new_url)
 
     def _handle_relation_broken(self, event: RelationEvent) -> None:
-        self._stored.current_url = None  # type: ignore
-        self.on.revoked.emit(relation=event.relation, app=event.relation.app)  # type: ignore
+        self._stored.current_url = None
+        self.on.revoked.emit(relation=event.relation, app=event.relation.app)
 
     def _handle_upgrade_or_leader(self, event: EventBase) -> None:
         """On upgrade/leadership change: ensure we publish the data we have."""
@@ -887,13 +887,13 @@ class IngressPerAppRequirer(_IngressPerAppBase):
 
         try:
             # Ignore pyright errors since pyright does not like aliases.
-            IngressRequirerAppData(  # type: ignore
+            IngressRequirerAppData(
                 model=self.model.name,
                 name=self.app.name,
                 scheme=scheme,
                 port=port,
-                strip_prefix=self._strip_prefix,  # type: ignore
-                redirect_https=self._redirect_https,  # type: ignore
+                strip_prefix=self._strip_prefix,
+                redirect_https=self._redirect_https,
                 healthcheck_params=(
                     IngressHealthCheck(**self.healthcheck_params)
                     if self.healthcheck_params
@@ -945,7 +945,7 @@ class IngressPerAppRequirer(_IngressPerAppBase):
         Returns None if the URL isn't available yet.
         """
         data = (
-            typing.cast(Optional[str], self._stored.current_url)  # type: ignore
+            typing.cast(Optional[str], self._stored.current_url)
             or self._get_url_from_relation_data()
         )
         return data
