@@ -11,7 +11,7 @@ dependencies = [
     "pydantic",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "jubilant",
     "ops[testing]",
@@ -19,6 +19,7 @@ dev = [
     "pytest-subprocess",
     "requests",
     "ruff",
+    "ty"
 ]
 
 # charms are no real python module
