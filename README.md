@@ -51,14 +51,14 @@ To test locally with a simple ingress provider:
 % charmcraft pack
 % juju deploy ./ubuntu-debuginfod_*.charm ubuntu-debuginfod --config testmode=true
 
-% juju deploy haproxy --channel 2.8/edge --config external-hostname=debuginfod.internal
+% juju deploy haproxy --channel 2.8/edge --config external-hostname=debuginfod.local
 % juju deploy self-signed-certificates --channel 1/edge
+% juju integrate haproxy:certificates self-signed-certificates:certificates
 
 # ingress relation (auto-matched by ingress interface)
 % juju integrate ubuntu-debuginfod haproxy
 
 # proxy relay test for debuginfod API path
-# unknown build IDs are fine for smoke tests; you still validate routing/path handling
-% curl -i -k -H "Host: debuginfod.internal" \
-  "http://<haproxy-ip>/<model-name>-ubuntu-debuginfod/buildid/0000000000000000000000000000000000000000/debuginfo"
+# you'll get a 404 not found for this unknown build id
+% curl -i -k -H "Host: debuginfod.local" "https://$haproxy_ip/$model_name-ubuntu-debuginfod/buildid/0000000000000000000000000000000000000000/debuginfo"
 ```
