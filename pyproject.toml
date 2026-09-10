@@ -1,7 +1,7 @@
 [project]
 name = "ubuntu-debuginfod-operator"
 version = "0.1.0"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 
 dependencies = [
     "ops",
@@ -9,6 +9,7 @@ dependencies = [
     "charmlibs-apt",
     "charmlibs-pathops",
     "pydantic",
+    "tomli-w",
 ]
 
 [dependency-groups]

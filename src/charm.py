@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 from pathlib import Path
 
 import ops
@@ -103,6 +104,8 @@ class UbuntuDebuginfodCharm(ops.CharmBase):
                           self._on_debuginfoddb_storage_attached)
         framework.observe(self.on.debugdb_storage_attached,
                           self._on_debugdb_storage_attached)
+        framework.observe(self.on.debugtmp_storage_attached,
+                          self._on_debugtmp_storage_attached)
 
         # triggers when the ingress url changes
         framework.observe(self._ingress.on.ready, self._on_ingress_ready)
@@ -133,6 +136,12 @@ class UbuntuDebuginfodCharm(ops.CharmBase):
     def _on_debugdb_storage_attached(self, event: ops.StorageAttachedEvent):
         # storage may attach after install; move the cluster now that it exists.
         self._ubuntu_debuginfod.relocate_postgres_storage()
+
+    def _on_debugtmp_storage_attached(self, event: ops.StorageAttachedEvent):
+        # storage may attach after configure; re-apply the TMPDIR drop-ins.
+        cfg = self._load_cfg()
+        if self._ubuntu_debuginfod.installed():
+            self._configure(cfg)
 
     def _on_install(self, event: ops.InstallEvent):
         self._install(self._load_cfg())
@@ -182,7 +191,13 @@ class UbuntuDebuginfodCharm(ops.CharmBase):
             return
 
         # a TMPDIR drop-in change needs a worker restart to take effect.
-        self._ubuntu_debuginfod.configure(self.unit, cfg, force_restart=tmpdir_changed)
+        self._ubuntu_debuginfod.configure(
+            self.unit,
+            cfg,
+            force_restart=tmpdir_changed,
+            proxy_url=self._proxy_url(cfg),
+            no_proxy=os.environ.get("JUJU_CHARM_NO_PROXY") or None,
+        )
         self._debuginfod.configure(self.unit, cfg)
 
         # Open exactly one externally exposed port based on mode.
@@ -288,21 +303,15 @@ class UbuntuDebuginfodCharm(ops.CharmBase):
         return os.environ.get("JUJU_CHARM_HTTPS_PROXY") or os.environ.get("JUJU_CHARM_HTTP_PROXY") or None
 
     def _configure_proxy(self, cfg: config.Config):
-        """Write/remove the proxy systemd drop-in for the managed services.
+        """Write/remove the proxy systemd drop-in for debuginfod.service.
 
-        The services run outside the hook context and don't see the model's
-        proxy env; without a proxy on a no-direct-egress machine they hang.
-        A drop-in is the right place since a proxy is a deployment concern,
-        not a property of the packaged software.
+        debuginfod itself doesn't go through the ubuntu-debuginfod CLI, so it
+        has no config.toml to read; the drop-in is its only proxy source.
+        The ubuntu-debuginfod services get their proxy from config.toml
+        (rendered in _configure), which also covers manual CLI invocations.
         """
         url = self._proxy_url(cfg)
-        services = (
-            "debuginfod.service",
-            "ubuntu-debuginfod-launchpad-poller.service",
-            "ubuntu-debuginfod-launchpad-downloader.service",
-            "ubuntu-debuginfod-launchpad-downloader@.service",
-            "ubuntu-debuginfod-launchpad-cleaner.service",
-        )
+        services = ("debuginfod.service",)
         changed = False
         for service in services:
             dropin = self._root / f"etc/systemd/system/{service}.d/proxy.conf"
@@ -323,40 +332,69 @@ class UbuntuDebuginfodCharm(ops.CharmBase):
             run_check("systemctl daemon-reload")
 
     def _configure_tmpdir(self) -> bool:
-        """Write the TMPDIR drop-in for the downloader workers.
+        """Write the TMPDIR drop-ins for the downloader workers and debuginfod.
 
-        Downloads stage in tempfile.NamedTemporaryFile, which defaults to /tmp
-        (a small tmpfs); multi-hundred-MB ddebs fill it and take down apt and
-        the juju agent with it. Stage on the debugsyms volume instead.
+        Downloads stage in tempfile.NamedTemporaryFile and source extraction
+        in tempfile.TemporaryDirectory, which default to /tmp (a small tmpfs);
+        multi-hundred-MB ddebs fill it and take down apt and the juju agent
+        with it. Stage on the fast debugtmp volume when attached, else on the
+        debugsyms volume.
 
-        Returns whether the drop-in changed, so callers can restart the workers
+        Returns whether a drop-in changed, so callers can restart the workers
         (a running process never re-reads its environment).
         """
-        tmpdir = self._root / "srv/debug-mirror/tmpdir"
-        tmpdir.mkdir(parents=True, exist_ok=True)
+        # staging lives at the fixed path /srv/debug-mirror/tmp: a symlink to
+        # the debugtmp volume when attached (juju forbids nesting its mount
+        # under the debugsyms mount), else a plain dir on the debugsyms volume.
+        tmp_root = self._root / "srv/debug-mirror/tmp"
+        nvme_tmp = self._root / "srv/debug-tmp"
+        if os.path.ismount(nvme_tmp):
+            if tmp_root.is_symlink():
+                if tmp_root.resolve() != nvme_tmp:
+                    tmp_root.unlink()
+                    tmp_root.symlink_to(nvme_tmp)
+            else:
+                if tmp_root.exists():
+                    shutil.rmtree(tmp_root)
+                tmp_root.symlink_to(nvme_tmp)
+        else:
+            if tmp_root.is_symlink():
+                tmp_root.unlink()
+            tmp_root.mkdir(parents=True, exist_ok=True)
+
+        download_tmpdir = tmp_root / "download"
+        download_tmpdir.mkdir(parents=True, exist_ok=True)
+        # mirror-owned: tempfile silently falls back to /var/tmp when its
+        # TMPDIR candidate isn't writable, staging on the root disk instead.
+        shutil.chown(download_tmpdir, user="mirror", group="mirror")
         # debuginfod (DynamicUser) extracts archives via TMPDIR too; it cannot
         # write the mirror-owned downloader staging dir, so it gets its own.
-        debuginfod_tmpdir = self._root / "srv/debug-mirror/debuginfod-tmp"
+        # 1777: the dynamic user must create entries; the sticky bit keeps
+        # workers from unlinking each other's staging. debuginfod's fdcache
+        # grooms this dir itself (fdcache tmpdir min%), so no cleaner needed.
+        debuginfod_tmpdir = tmp_root / "debuginfod"
         debuginfod_tmpdir.mkdir(parents=True, exist_ok=True)
         debuginfod_tmpdir.chmod(0o1777)
-        # reap staging corpses from killed workers; a download in flight is
-        # never older than this, so only orphans match.
-        changed = file_ensure_content(
-            self._root / "etc/tmpfiles.d/ubuntu-debuginfod.conf",
-            content=f"d {tmpdir} 0755 mirror mirror 1d\n"
-            f"e {tmpdir} 0755 mirror mirror 1d\n"
-            f"d {debuginfod_tmpdir} 1777 - - 1d\n"
-            f"e {debuginfod_tmpdir} 1777 - - 1d\n",
-        )
-        run_ret("systemd-tmpfiles --create --remove ubuntu-debuginfod.conf")
+
+        # drop the tmpfiles config from earlier charm revisions;
+        # systemd-tmpfiles --clean recursively walks the extraction trees
+        # (openjdk, ...) and hangs for hours on slow storage, blocking apt and
+        # needrestart.
+        file_remove(self._root / "etc/tmpfiles.d/ubuntu-debuginfod.conf")
+
+        changed = False
         for service in (
             "ubuntu-debuginfod-launchpad-downloader.service",
             "ubuntu-debuginfod-launchpad-downloader@.service",
         ):
             changed |= file_ensure_content(
                 self._root / f"etc/systemd/system/{service}.d/tmpdir.conf",
-                content=f'[Service]\nEnvironment="TMPDIR={tmpdir}"\n',
+                content=f'[Service]\nEnvironment="TMPDIR={download_tmpdir}"\n',
             )
+        changed |= file_ensure_content(
+            self._root / "etc/systemd/system/debuginfod.service.d/tmpdir.conf",
+            content=f'[Service]\nEnvironment="TMPDIR={debuginfod_tmpdir}"\n',
+        )
         if changed:
             run_check("systemctl daemon-reload")
         return changed

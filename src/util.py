@@ -38,9 +38,10 @@ def file_ensure_content(
 ) -> bool:
     """For the given path, ensure content is present by replacing or adding.
 
-    `matcher` is a regex searching for content to be updated and replaced by `replace`.
-    when `matcher` does not match, instead append/set `content` to the file
-    (configured by `append_missing`).
+    Without `matcher`, the file's whole content is ensured to be `content`.
+    `matcher` is a regex searching for content to be updated and replaced by
+    `replace`; when it does not match, `content` is appended (or the file
+    overwritten, per `append_missing`).
 
     returns if file was changed.
     """
@@ -65,7 +66,13 @@ def file_ensure_content(
                         hdl.write(new_cfg)
                         changed = True
 
-        elif current_content == content:
+        elif current_content != content:
+            # no matcher: ensure the whole content
+            with file_path.open("w") as hdl:
+                hdl.write(content)
+            changed = True
+            missing = False
+        else:
             missing = False
 
     else:

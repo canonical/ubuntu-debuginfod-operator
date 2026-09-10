@@ -6,6 +6,7 @@
 import os
 import shutil
 import stat
+import tomllib
 from pathlib import Path
 from unittest.mock import patch
 
@@ -142,12 +143,13 @@ def test_configure_writes_toml_and_stops_services_in_testmode(
     )
 
     config_toml = (config_dir / "config.toml").read_text()
-    assert 'mirror_dir = "/srv/debug-mirror"' in config_toml
-    assert config_toml.count("[[ppas]]") == 5
-    assert 'user = "ubuntu-esm"' in config_toml
-    assert 'name = "realtime-updates"' in config_toml
-    assert config_toml.count("private = true") == 5
-    assert "database_url" not in config_toml
+    parsed = tomllib.loads(config_toml)
+    assert parsed["settings"]["mirror_dir"] == "/srv/debug-mirror"
+    assert parsed["settings"]["tmpdir"] == f"{tmp_path}/srv/debug-mirror/tmp/download"
+    assert len(parsed["ppas"]) == 5
+    assert {"user": "ubuntu-esm", "name": "esm-infra-updates", "private": True} in parsed["ppas"]
+    assert {"user": "ubuntu-advantage", "name": "realtime-updates", "private": True} in parsed["ppas"]
+    assert "database_url" not in parsed["settings"]
     assert not credentials_path.exists()
 
     stopped_services = [
@@ -158,6 +160,61 @@ def test_configure_writes_toml_and_stops_services_in_testmode(
     ]
     for service in stopped_services:
         assert fake_process.call_count(["systemctl", "disable", "--now", service]) == 1
+
+
+@patch("shutil.chown")
+def test_configure_renders_proxy_into_toml(mock_chown, fake_process, tmp_path):
+    fake_process.register([fake_process.any()])
+    fake_process.keep_last_process(True)
+
+    UbuntuDebuginfod(tmp_path).configure(
+        unit=None,
+        config=Config(
+            sync_launchpad=True, testmode=True, use_reverse_proxy=False, mirror_architectures=["amd64", "arm64"]
+        ),
+        proxy_url="http://egress.ps7.internal:3128",
+    )
+    config_toml = (tmp_path / "home/mirror/.config/ubuntu-debuginfod/config.toml").read_text()
+    assert 'proxy = "http://egress.ps7.internal:3128"' in config_toml
+    assert 'mirror_arches = [\n    "amd64",\n    "arm64",\n]' in config_toml
+
+    # without a proxy, the line must not be rendered at all
+    no_proxy_root = tmp_path.parent / (tmp_path.name + "-no-proxy")
+    no_proxy_root.mkdir()
+    UbuntuDebuginfod(no_proxy_root).configure(
+        unit=None,
+        config=Config(sync_launchpad=True, testmode=True, use_reverse_proxy=False),
+        proxy_url=None,
+    )
+    config_toml = (no_proxy_root / "home/mirror/.config/ubuntu-debuginfod/config.toml").read_text()
+    assert 'proxy = ' not in config_toml
+    assert "mirror_arches" not in config_toml
+
+@patch("shutil.chown")
+def test_configure_tmpdir_writes_dropins_and_installs_prune_timer(mock_chown, fake_process, tmp_path):
+    """Without the debugtmp volume, staging falls back to the debugsyms volume."""
+    fake_process.register([fake_process.any()])
+    fake_process.keep_last_process(True)
+
+    charm_root = tmp_path / "root"
+    charm_root.mkdir()
+
+    charm = UbuntuDebuginfodCharm.__new__(UbuntuDebuginfodCharm)
+    charm._root = charm_root
+    assert charm._configure_tmpdir() is True
+
+    dropin = (charm_root / "etc/systemd/system/debuginfod.service.d/tmpdir.conf").read_text()
+    assert f'TMPDIR={charm_root}/srv/debug-mirror/tmp/debuginfod' in dropin
+    downloader_dropin = (
+        charm_root / "etc/systemd/system/ubuntu-debuginfod-launchpad-downloader@.service.d/tmpdir.conf"
+    ).read_text()
+    assert f'TMPDIR={charm_root}/srv/debug-mirror/tmp/download' in downloader_dropin
+    # the root-level prune timer for the debuginfod staging dir is gone:
+    # debuginfod's fdcache grooms its own tmpdir
+    assert not (charm_root / "etc/systemd/system/debuginfod-tmp-clean.service").exists()
+    # the tmpfiles config from earlier charm revisions is removed
+    assert not (charm_root / "etc/tmpfiles.d/ubuntu-debuginfod.conf").exists()
+
 
 @patch("shutil.chown")
 def test_start_success(
@@ -337,7 +394,7 @@ def test_upgrade_configures_before_start(mock_chown, fake_process, ctx, tmp_path
     assert isinstance(out.unit_status, ActiveStatus)
     config_path = tmp_path / "home/mirror/.config/ubuntu-debuginfod/config.toml"
     assert config_path.is_file()
-    assert "[[ppas]]" in config_path.read_text()
+    assert len(tomllib.loads(config_path.read_text())["ppas"]) == 5
 
 
 @patch("shutil.chown")
@@ -423,7 +480,7 @@ def test_overwrite_existing_file_without_matcher(tmp_path: Path):
     file.write_text("Old content.")
     new_content = "New content!"
 
-    file_ensure_content(file, new_content, append_missing=False)
+    file_ensure_content(file, new_content)
 
     assert file.read_text() == new_content
 

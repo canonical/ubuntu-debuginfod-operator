@@ -8,9 +8,10 @@ import pwd
 import shlex
 import shutil
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import ops
+import tomli_w
 
 from util import file_ensure_content, file_link, file_remove, run_check, run_out, run_ret
 
@@ -23,34 +24,7 @@ if TYPE_CHECKING:
 basedir = Path(__file__).parent.parent
 logger = logging.getLogger(__name__)
 
-UBUNTU_DEBUGINFOD_CONFIG = """[settings]
-mirror_dir = "/srv/debug-mirror"
 
-[[ppas]]
-user = "ubuntu-esm"
-name = "esm-infra-security"
-private = true
-
-[[ppas]]
-user = "ubuntu-esm"
-name = "esm-infra-updates"
-private = true
-
-[[ppas]]
-user = "ubuntu-esm"
-name = "esm-apps-security"
-private = true
-
-[[ppas]]
-user = "ubuntu-esm"
-name = "esm-apps-updates"
-private = true
-
-[[ppas]]
-user = "ubuntu-advantage"
-name = "realtime-updates"
-private = true
-"""
 
 POSTGRES_DATA_DIR = "var/lib/postgresql"
 DEBUGDB_STORAGE_DIR = "srv/debug-db"
@@ -58,6 +32,40 @@ DEBUGDB_STORAGE_DIR = "srv/debug-db"
 DOWNLOADER_SERVICE = "ubuntu-debuginfod-launchpad-downloader.service"
 DOWNLOADER_SERVICE_TEMPLATE = "ubuntu-debuginfod-launchpad-downloader@{worker}.service"
 DOWNLOADER_SERVICE_PREFIX = "ubuntu-debuginfod-launchpad-downloader@"
+
+# private PPAs whose debug symbols are mirrored (require launchpad auth).
+PPAS = (
+    {"user": "ubuntu-esm", "name": "esm-infra-security", "private": True},
+    {"user": "ubuntu-esm", "name": "esm-infra-updates", "private": True},
+    {"user": "ubuntu-esm", "name": "esm-apps-security", "private": True},
+    {"user": "ubuntu-esm", "name": "esm-apps-updates", "private": True},
+    {"user": "ubuntu-advantage", "name": "realtime-updates", "private": True},
+)
+
+
+def _ubuntu_debuginfod_config(
+    proxy_url: str | None,
+    no_proxy: str | None,
+    mirror_arches: list[str],
+    tmpdir: str | None,
+) -> str:
+    """Render the upstream config.toml from a data structure.
+
+    The proxy goes into the central config.toml so the ubuntu-debuginfod
+    services and manual CLI invocations (import-current, ...) all get the
+    same egress routing.
+    """
+    settings: dict[str, Any] = {"mirror_dir": "/srv/debug-mirror"}
+    if proxy_url is not None:
+        settings["proxy"] = proxy_url
+    if no_proxy:
+        settings["no_proxy"] = no_proxy
+    if mirror_arches:
+        settings["mirror_arches"] = mirror_arches
+    if tmpdir is not None:
+        # the cleaner prunes this staging dir (top-level entries only)
+        settings["tmpdir"] = str(tmpdir)
+    return tomli_w.dumps({"settings": settings, "ppas": list(PPAS)})
 
 
 class UbuntuDebuginfod:
@@ -72,8 +80,8 @@ class UbuntuDebuginfod:
             "srv/debug-mirror/ddebs/",
             "srv/debug-mirror/ppas/",
             "srv/debug-mirror/private-ppas/",
-            "srv/debug-mirror/ubuntu-archive-dbg/",
             "srv/debug-mirror/tmpdir/",
+            "srv/debug-mirror/metadata/",
         )
 
         for directory in storage_dirs:
@@ -209,7 +217,14 @@ class UbuntuDebuginfod:
         """
         return run_ret("systemctl cat ubuntu-debuginfod-launchpad-poller.service") == 0
 
-    def configure(self, unit: Unit, config: Config, force_restart: bool = False) -> None:
+    def configure(
+        self,
+        unit: Unit,
+        config: Config,
+        force_restart: bool = False,
+        proxy_url: str | None = None,
+        no_proxy: str | None = None,
+    ) -> None:
         """
         ubuntu-debuginfod setup configuration.
         """
@@ -244,9 +259,22 @@ class UbuntuDebuginfod:
 
         changed |= file_ensure_content(
             self.root_path / "home/mirror/.config/ubuntu-debuginfod/config.toml",
-            content=UBUNTU_DEBUGINFOD_CONFIG,
+            content=_ubuntu_debuginfod_config(
+                proxy_url,
+                no_proxy,
+                config.mirror_architectures,
+                tmpdir=str(self.root_path / "srv/debug-mirror/tmp/download"),
+            ),
             mkdir=True,
             owner="mirror",
+        )
+
+        # The schema migration is idempotent and cheap when nothing
+        # changed; run it on every configure so a broken migration fails
+        # the hook instead of leaving the services to crash-loop.
+        run_check(
+            "runuser -u mirror -- /usr/bin/python3 -I -m ubuntu_debuginfod.cli "
+            "--config /home/mirror/.config/ubuntu-debuginfod/config.toml db migrate"
         )
 
         if config.testmode:
@@ -263,11 +291,6 @@ class UbuntuDebuginfod:
             run_check("systemctl disable --now ubuntu-debuginfod-launchpad-poller.service")
 
     def restart(self, unit: Unit, config: Config) -> None:
-        run_check(
-            "runuser -u mirror -- /usr/bin/python3 -I -m ubuntu_debuginfod.cli "
-            "--config /home/mirror/.config/ubuntu-debuginfod/config.toml db migrate"
-        )
-
         if config.testmode:
             # if testing, don't actually download stuff from launchpad
             # TODO: import just one package for testing.

@@ -38,3 +38,15 @@ class Config(pydantic.BaseModel):
     # http(s) proxy URL for the services' outbound connections (e.g. to Launchpad).
     # empty -> fall back to the model's JUJU_CHARM_*_PROXY env; "none" -> no proxy.
     proxy: str = pydantic.Field(default="")
+
+    # architectures whose debug symbols are downloaded (upstream mirror_arches).
+    # space-separated in juju; empty -> all architectures (upstream default).
+    mirror_architectures: list[str] = pydantic.Field(default_factory=list)
+
+    @pydantic.field_validator("mirror_architectures", mode="before")
+    @classmethod
+    def _parse_arches(cls, value):
+        # juju string options arrive as one space-separated string
+        if isinstance(value, str):
+            return value.split()
+        return value

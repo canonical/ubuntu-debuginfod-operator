@@ -73,6 +73,17 @@ storage:
     multiple:
       range: 0-1
 
+  # fast scratch space for the downloader staging and debuginfod's
+  # archive extractions, e.g. a 200G cinder-nvme volume. Optional:
+  # without it, staging happens on the debugsyms volume itself.
+  debugtmp:
+    description: fast temporary storage for downloads and archive extraction
+    type: filesystem
+    #minimum-size: 200G ?
+    location: /srv/debug-tmp/
+    multiple:
+      range: 0-1
+
 requires:
   # debuginfod gets requests via http
   # https://charmhub.io/integrations/ingress
@@ -121,6 +132,12 @@ config:
         without direct egress need this.
         Empty (default) falls back to the model's juju-http(s)-proxy settings.
         Set to "none" to force no proxy.
+      default: ""
+    mirror_architectures:
+      type: string
+      description: |
+        space-separated list of architectures whose debug symbols are downloaded
+        (e.g. "amd64 arm64"). empty -> all architectures.
       default: ""
     lp_credentials:
       type: secret
