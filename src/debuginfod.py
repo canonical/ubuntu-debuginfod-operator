@@ -37,7 +37,8 @@ class Debuginfod:
     def install(self, unit: Unit) -> None:
         unit.status = ops.MaintenanceStatus("Installing debuginfod...")
 
-        run_check("apt-get install -y debuginfod")
+        # libarchive-tools provides bsdtar for deb archive extraction
+        run_check("apt-get install -y debuginfod libarchive-tools sqlite3")
 
         unit.status = ops.MaintenanceStatus("Setting up debuginfod...")
 

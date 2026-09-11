@@ -5,8 +5,7 @@ After=network.target network-online.target nss-lookup.target
 [Service]
 Type=simple
 EnvironmentFile=/etc/default/debuginfod
-# the charm overrides this via a tmpdir.conf drop-in pointing at the
-# fast debugtmp storage (/srv/debug-tmp/debuginfod)
+# TMPDIR for archive extraction
 Environment=TMPDIR=/srv/debug-mirror/tmp/debuginfod/
 ExecStart=/usr/bin/debuginfod -d /var/cache/debuginfod/debuginfod.sqlite -p $DEBUGINFOD_PORT $DEBUGINFOD_OPTIONS $DEBUGINFOD_VERBOSE $DEBUGINFOD_PRAGMAS /srv/debug-mirror/ddebs/ /srv/debug-mirror/ppas/ /srv/debug-mirror/private-ppas/
 Restart=on-failure
@@ -20,7 +19,6 @@ ProtectKernelModules=true
 MemoryDenyWriteExecute=true
 RestrictRealtime=true
 ReadOnlyPaths=/srv/debug-mirror/ddebs/ /srv/debug-mirror/ppas/ /srv/debug-mirror/private-ppas/
-# TMPDIR for archive extraction
 ReadWritePaths=/srv/debug-mirror/tmp/debuginfod/
 CacheDirectory=debuginfod
 #TemporaryFileSystem=/var/tmp/:size=25%:nostrictatime
