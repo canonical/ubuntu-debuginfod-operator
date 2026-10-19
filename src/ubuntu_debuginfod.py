@@ -165,6 +165,8 @@ class UbuntuDebuginfod:
 
     @staticmethod
     def _downloader_services(config: Config) -> set[str]:
+        if not config.download:
+            return set()
         return {
             DOWNLOADER_SERVICE_TEMPLATE.format(worker=worker)
             for worker in range(1, config.downloader_workers + 1)
@@ -172,7 +174,8 @@ class UbuntuDebuginfod:
 
     @staticmethod
     def _enabled_downloader_services() -> set[str]:
-        output = run_out("systemctl show multi-user.target --property=Wants --value")
+        # the worker template is WantedBy the control unit, not multi-user.target
+        output = run_out(f"systemctl show {DOWNLOADER_SERVICE} --property=Wants --value")
         return {
             service
             for service in output.split()
@@ -297,7 +300,7 @@ class UbuntuDebuginfod:
             return
 
         # The downloader processes jobs produced by the poller.
-        desired_downloaders = self._downloader_services(config) if config.download else set()
+        desired_downloaders = self._downloader_services(config)
         for service in sorted(self._enabled_downloader_services() - desired_downloaders):
             run_check(f"systemctl disable --now {service}")
         run_ret(f"systemctl disable --now {DOWNLOADER_SERVICE}")
@@ -331,8 +334,7 @@ class UbuntuDebuginfod:
             return False
         if run_ret("systemctl is-active ubuntu-debuginfod-launchpad-cleaner.timer") != 0:
             return False
-        if not config.download:
-            return True
+        # polling is independent of downloading
         return not config.sync_launchpad or run_ret(
             "systemctl is-active ubuntu-debuginfod-launchpad-poller.service"
         ) == 0

@@ -8,9 +8,10 @@ import shutil
 import stat
 import tomllib
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
+from ops import Unit
 from ops.testing import ActiveStatus, BlockedStatus, Context, Resource, Secret, State
 
 from charm import UbuntuDebuginfodCharm
@@ -25,6 +26,12 @@ from util import file_ensure_content
 def ctx() -> Context:
     """Create a standard context for the charm."""
     return Context(UbuntuDebuginfodCharm)
+
+
+@pytest.fixture
+def unit() -> Unit:
+    """A stand-in for the charm's unit when calling the service wrappers directly."""
+    return Mock(spec=Unit)
 
 
 @patch("os.chown")
@@ -109,13 +116,13 @@ def test_install_from_package_resources(mock_os_chown, fake_process, ctx, tmp_pa
 
 @patch("shutil.chown")
 def test_configure_writes_toml_and_stops_services_in_testmode(
-    mock_chown, fake_process, tmp_path
+    mock_chown, fake_process, tmp_path, unit
 ):
     fake_process.register(
         [
             "systemctl",
             "show",
-            "multi-user.target",
+            "ubuntu-debuginfod-launchpad-downloader.service",
             "--property=Wants",
             "--value",
         ],
@@ -138,7 +145,7 @@ def test_configure_writes_toml_and_stops_services_in_testmode(
     credentials_path.write_text("stale credentials")
 
     UbuntuDebuginfod(tmp_path).configure(
-        unit=None,
+        unit=unit,
         config=Config(sync_launchpad=True, testmode=True, use_reverse_proxy=False),
     )
 
@@ -163,12 +170,12 @@ def test_configure_writes_toml_and_stops_services_in_testmode(
 
 
 @patch("shutil.chown")
-def test_configure_renders_proxy_into_toml(mock_chown, fake_process, tmp_path):
+def test_configure_renders_proxy_into_toml(mock_chown, fake_process, tmp_path, unit):
     fake_process.register([fake_process.any()])
     fake_process.keep_last_process(True)
 
     UbuntuDebuginfod(tmp_path).configure(
-        unit=None,
+        unit=unit,
         config=Config(
             sync_launchpad=True, testmode=True, use_reverse_proxy=False, mirror_architectures=["amd64", "arm64"]
         ),
@@ -182,7 +189,7 @@ def test_configure_renders_proxy_into_toml(mock_chown, fake_process, tmp_path):
     no_proxy_root = tmp_path.parent / (tmp_path.name + "-no-proxy")
     no_proxy_root.mkdir()
     UbuntuDebuginfod(no_proxy_root).configure(
-        unit=None,
+        unit=unit,
         config=Config(sync_launchpad=True, testmode=True, use_reverse_proxy=False),
         proxy_url=None,
     )
@@ -236,7 +243,7 @@ def test_start_success(
     downloader_units_command = [
         "systemctl",
         "show",
-        "multi-user.target",
+        "ubuntu-debuginfod-launchpad-downloader.service",
         "--property=Wants",
         "--value",
     ]
@@ -342,11 +349,11 @@ def test_relocate_postgres_storage_skips_without_mount(fake_process, tmp_path):
     assert fake_process.call_count(["rsync", "-aHAX", fake_process.any()]) == 0
 
 
-def test_restart_reconciles_downloader_workers(fake_process):
+def test_restart_reconciles_downloader_workers(fake_process, unit):
     downloader_units_command = [
         "systemctl",
         "show",
-        "multi-user.target",
+        "ubuntu-debuginfod-launchpad-downloader.service",
         "--property=Wants",
         "--value",
     ]
@@ -367,7 +374,7 @@ def test_restart_reconciles_downloader_workers(fake_process):
         use_reverse_proxy=False,
     )
 
-    UbuntuDebuginfod(Path("/")).restart(unit=None, config=config)
+    UbuntuDebuginfod(Path("/")).restart(unit=unit, config=config)
 
     assert fake_process.call_count(
         [
@@ -381,6 +388,57 @@ def test_restart_reconciles_downloader_workers(fake_process):
         service = f"ubuntu-debuginfod-launchpad-downloader@{worker}.service"
         assert fake_process.call_count(["systemctl", "enable", service]) == 1
         assert fake_process.call_count(["systemctl", "restart", service]) == 1
+
+
+POLLER = "ubuntu-debuginfod-launchpad-poller.service"
+CLEANER_TIMER = "ubuntu-debuginfod-launchpad-cleaner.timer"
+
+
+def _register_service_state(fake_process, *, enabled_workers=(), inactive=()):
+    """Fake systemd: the given workers are enabled; `inactive` units fail is-active."""
+    fake_process.register(
+        ["systemctl", "show", "ubuntu-debuginfod-launchpad-downloader.service", "--property=Wants", "--value"],
+        stdout=" ".join(f"ubuntu-debuginfod-launchpad-downloader@{w}.service" for w in enabled_workers) + "\n",
+    )
+    for unit in inactive:
+        fake_process.register(["systemctl", "is-active", unit], returncode=3)
+    fake_process.register([fake_process.any()])
+    fake_process.keep_last_process(True)
+
+
+def test_is_running_requires_poller_when_syncing(fake_process):
+    config = Config(sync_launchpad=True, downloader_workers=1, testmode=False, use_reverse_proxy=False)
+    _register_service_state(fake_process, enabled_workers=(1,), inactive=(POLLER,))
+
+    assert not UbuntuDebuginfod(Path("/")).is_running(config)
+
+
+def test_is_running_ignores_poller_when_not_syncing(fake_process):
+    config = Config(sync_launchpad=False, downloader_workers=1, testmode=False, use_reverse_proxy=False)
+    _register_service_state(fake_process, enabled_workers=(1,), inactive=(POLLER,))
+
+    assert UbuntuDebuginfod(Path("/")).is_running(config)
+
+
+def test_is_running_checks_poller_without_download(fake_process):
+    config = Config(sync_launchpad=True, download=False, testmode=False, use_reverse_proxy=False)
+    _register_service_state(fake_process, inactive=(POLLER,))
+
+    assert not UbuntuDebuginfod(Path("/")).is_running(config)
+
+
+def test_is_running_without_download_expects_no_workers(fake_process):
+    config = Config(sync_launchpad=True, download=False, testmode=False, use_reverse_proxy=False)
+    _register_service_state(fake_process)
+
+    assert UbuntuDebuginfod(Path("/")).is_running(config)
+
+
+def test_is_running_requires_cleaner_timer(fake_process):
+    config = Config(sync_launchpad=False, downloader_workers=1, testmode=False, use_reverse_proxy=False)
+    _register_service_state(fake_process, enabled_workers=(1,), inactive=(CLEANER_TIMER,))
+
+    assert not UbuntuDebuginfod(Path("/")).is_running(config)
 
 
 @patch("shutil.chown")
