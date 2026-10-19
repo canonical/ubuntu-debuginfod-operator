@@ -55,3 +55,6 @@ skip = "build,lib,venv,icon.svg,.tox,.git,.mypy_cache,.ruff_cache,.coverage"
 [tool.ty.environment]
 extra-paths = ["lib"]
 
+[tool.ty.src]
+exclude = ["lib"]
+

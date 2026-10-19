@@ -2,24 +2,27 @@
 
 To make contributions to this charm, you'll need a working [development setup](https://juju.is/docs/sdk/dev-setup).
 
+Development tasks are run with [`just`](https://just.systems); run `just` to list them.
+
 You can create an environment for development with `uv`:
 
 ``` console
-uv sync --all-extras --dev
+just sync
 # this creates .venv
 ```
 
 ## Testing
 
 This project uses `pytest` testing.
-that can be used for linting and formatting code when you're preparing contributions to the charm:
 
 ``` console
 # run unit tests
-uv run pytest --log-cli-level=DEBUG --tb native tests/unit
-# run integrationt tests
-uv run pytest --log-cli-level=DEBUG --tb native tests/integration
+just test
+# run integration tests (needs a Juju controller)
+just test-integration
 ```
+
+Extra arguments are passed to `pytest`, e.g. `just test -k is_running --log-cli-level=DEBUG --tb native`.
 
 To test a prebuilt upstream snapshot instead of the production PPA, provide both binary packages from the same source build:
 
@@ -36,8 +39,10 @@ You need the `charmcraft` snap.
 To build the charm file in this git repository:
 
 ``` console
-charmcraft pack
+just pack
 ```
+
+The `.charm` file is not rebuilt automatically: pack again before every `juju refresh --path`.
 
 The same package resources can be used without pytest for a manual deployment:
 
@@ -78,8 +83,6 @@ With the default `package_source=ppa`, neither resource is fetched and the charm
 We use `ruff` for style checking, `ty` for type checks.
 
 ``` console
-# to run type checks
-uv run ty check
-# code style linting
-uv run ruff check
+# style linting and type checks
+just lint
 ```

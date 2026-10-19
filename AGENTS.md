@@ -5,30 +5,22 @@ This is a [Juju charm](https://juju.is/charms-architecture) (built with the [`op
 ## Tooling
 
 - `uv` for dependency management/venvs
-- `ruff` for linting/formatting
-- `ty` for type checking.
+- `ruff` for linting, `ty` for type checking
+- `just` runs the tasks; the [justfile](justfile) is the source of truth for the exact commands
 
 ```console
-# sync the environment (creates .venv)
-uv sync --all-extras --dev
-
-# lint
-uv run ruff check
-
-# type check
-uv run ty check src
-
-# unit tests
-uv run pytest --log-cli-level=DEBUG --tb native tests/unit
-
-# integration tests (needs a Juju controller/model)
-uv run pytest --log-cli-level=DEBUG --tb native tests/integration
-
-# build the charm (needs the charmcraft snap)
-charmcraft pack
+just                   # list the recipes
+just sync              # create/update .venv
+just lint              # ruff + ty
+just test              # unit tests; arguments go to pytest, e.g. `just test -k is_running --tb native`
+just test-integration  # needs a Juju controller/model
+just check             # lint + test
+just pack              # build the .charm (needs the charmcraft snap)
 ```
 
-Always run `uv run ruff check` and `uv run pytest tests/unit` before considering a change complete (CI in `.github/workflows/test.yaml` runs the same two steps).
+Always run `just check` before considering a change complete (CI in `.github/workflows/test.yaml` runs the same recipe).
+
+Run `just pack` before every `juju refresh --path`: the `.charm` in the checkout is never rebuilt automatically, and a stale one silently deploys old unit files and code.
 
 ## Code layout
 
