@@ -57,7 +57,7 @@ def test_install_success(
         "ubuntu-debuginfod",
     ]
     for pkg in installed_packages:
-        assert fake_process.call_count(["apt-get", "install", "-y", fake_process.any(), pkg]) == 1
+        assert fake_process.call_count(["apt-get", "install", "-y", fake_process.any(), pkg, fake_process.any()]) == 1
 
     assert fake_process.call_count(["add-apt-repository", "-y",
                                     fake_process.any(), "ppa:ubuntu-debuginfod-devs/ubuntu-debuginfod"]) == 1
