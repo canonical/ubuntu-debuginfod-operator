@@ -66,14 +66,21 @@ def test_install_success(
     for pkg in installed_packages:
         assert fake_process.call_count(["apt-get", "install", "-y", fake_process.any(), pkg, fake_process.any()]) == 1
 
-    assert fake_process.call_count(["add-apt-repository", "-y",
-                                    fake_process.any(), "ppa:ubuntu-debuginfod-devs/ubuntu-debuginfod"]) == 1
+    assert (
+        fake_process.call_count(
+            ["add-apt-repository", "-y", fake_process.any(), "ppa:ubuntu-debuginfod-devs/ubuntu-debuginfod"]
+        )
+        == 1
+    )
     assert fake_process.call_count(["apt-get", "install", "-y", "postgresql"]) == 1
     assert fake_process.call_count(["systemctl", "enable", "--now", "postgresql.service"]) == 1
     assert fake_process.call_count(["runuser", "-u", "postgres", "--", "createuser", "--login", "mirror"]) == 1
-    assert fake_process.call_count(
-        ["runuser", "-u", "postgres", "--", "createdb", "--owner", "mirror", "ubuntu-debuginfod"]
-    ) == 1
+    assert (
+        fake_process.call_count(
+            ["runuser", "-u", "postgres", "--", "createdb", "--owner", "mirror", "ubuntu-debuginfod"]
+        )
+        == 1
+    )
     assert (tmp_path / "srv/debug-mirror/ppas").is_dir()
     assert "/srv/debug-mirror/ppas/" in (tmp_path / "etc/systemd/system/debuginfod.service").read_text()
 
@@ -99,25 +106,24 @@ def test_install_from_package_resources(mock_os_chown, fake_process, ctx, tmp_pa
     out = ctx.run(ctx.on.install(), state)
 
     assert isinstance(out.unit_status, ActiveStatus)
-    assert fake_process.call_count(
-        ["add-apt-repository", "-y", "ppa:ubuntu-debuginfod-devs/ubuntu-debuginfod"]
-    ) == 0
-    assert fake_process.call_count(
-        [
-            "apt-get",
-            "install",
-            "-y",
-            "--no-install-recommends",
-            str(ubuntu_debuginfod_deb),
-            str(python_debuginfod_deb),
-        ]
-    ) == 1
+    assert fake_process.call_count(["add-apt-repository", "-y", "ppa:ubuntu-debuginfod-devs/ubuntu-debuginfod"]) == 0
+    assert (
+        fake_process.call_count(
+            [
+                "apt-get",
+                "install",
+                "-y",
+                "--no-install-recommends",
+                str(ubuntu_debuginfod_deb),
+                str(python_debuginfod_deb),
+            ]
+        )
+        == 1
+    )
 
 
 @patch("shutil.chown")
-def test_configure_writes_toml_and_stops_services_in_testmode(
-    mock_chown, fake_process, tmp_path, unit
-):
+def test_configure_writes_toml_and_stops_services_in_testmode(mock_chown, fake_process, tmp_path, unit):
     fake_process.register(
         [
             "systemctl",
@@ -194,8 +200,9 @@ def test_configure_renders_proxy_into_toml(mock_chown, fake_process, tmp_path, u
         proxy_url=None,
     )
     config_toml = (no_proxy_root / "home/mirror/.config/ubuntu-debuginfod/config.toml").read_text()
-    assert 'proxy = ' not in config_toml
+    assert "proxy = " not in config_toml
     assert "mirror_arches" not in config_toml
+
 
 @patch("shutil.chown")
 def test_configure_tmpdir_writes_dropins_and_installs_prune_timer(mock_chown, fake_process, tmp_path):
@@ -211,11 +218,11 @@ def test_configure_tmpdir_writes_dropins_and_installs_prune_timer(mock_chown, fa
     assert charm._configure_tmpdir() is True
 
     dropin = (charm_root / "etc/systemd/system/debuginfod.service.d/tmpdir.conf").read_text()
-    assert f'TMPDIR={charm_root}/srv/debug-mirror/tmp/debuginfod' in dropin
+    assert f"TMPDIR={charm_root}/srv/debug-mirror/tmp/debuginfod" in dropin
     downloader_dropin = (
         charm_root / "etc/systemd/system/ubuntu-debuginfod-launchpad-downloader@.service.d/tmpdir.conf"
     ).read_text()
-    assert f'TMPDIR={charm_root}/srv/debug-mirror/tmp/download' in downloader_dropin
+    assert f"TMPDIR={charm_root}/srv/debug-mirror/tmp/download" in downloader_dropin
     # the root-level prune timer for the debuginfod staging dir is gone:
     # debuginfod's fdcache grooms its own tmpdir
     assert not (charm_root / "etc/systemd/system/debuginfod-tmp-clean.service").exists()
@@ -262,9 +269,7 @@ def test_start_success(
     out = ctx.run(ctx.on.start(), state)
 
     assert isinstance(out.unit_status, ActiveStatus)
-    assert fake_process.call_count(
-        ["systemctl", "enable", "ubuntu-debuginfod-launchpad-cleaner.timer"]
-    ) == 1
+    assert fake_process.call_count(["systemctl", "enable", "ubuntu-debuginfod-launchpad-cleaner.timer"]) == 1
 
     started_services = [
         "debuginfod.service",
@@ -333,6 +338,52 @@ def test_relocate_postgres_storage_moves_cluster(mock_chown, fake_process, tmp_p
     assert fake_process.call_count(["rsync", "-aHAX", fake_process.any()]) == rsync_count
 
 
+@patch("shutil.chown")
+def test_relocate_postgres_storage_reuses_existing_cluster(mock_chown, fake_process, tmp_path):
+    storage = tmp_path / "srv/debug-db"
+    cluster = tmp_path / "var/lib/postgresql/18/main"
+    cluster.mkdir(parents=True)
+    (cluster / "PG_VERSION").write_text("18\n")
+    (cluster / "pg_control").write_text("new cluster")
+    dst = storage / "18/main"
+    dst.mkdir(parents=True)
+    (dst / "PG_VERSION").write_text("18\n")
+    (dst / "pg_control").write_text("original cluster")
+
+    fake_process.register(["findmnt", "--mountpoint", str(storage)], returncode=0)
+    fake_process.register(["systemctl", "is-active", "postgresql.service"], returncode=0)
+    fake_process.register(["systemctl", "stop", "postgresql.service"])
+    fake_process.register(["systemctl", "start", "postgresql.service"])
+
+    UbuntuDebuginfod(tmp_path).relocate_postgres_storage()
+
+    assert cluster.is_symlink()
+    assert cluster.resolve() == dst.resolve()
+    assert (dst / "pg_control").read_text() == "original cluster"
+    assert fake_process.call_count(["rsync", "-aHAX", fake_process.any()]) == 0
+
+
+@pytest.mark.parametrize("version", [None, "17\n"])
+def test_relocate_postgres_storage_rejects_invalid_cluster(fake_process, tmp_path, version):
+    storage = tmp_path / "srv/debug-db"
+    cluster = tmp_path / "var/lib/postgresql/18/main"
+    cluster.mkdir(parents=True)
+    dst = storage / "18/main"
+    dst.mkdir(parents=True)
+    (dst / "pg_control").write_text("original cluster")
+    if version is not None:
+        (dst / "PG_VERSION").write_text(version)
+
+    fake_process.register(["findmnt", "--mountpoint", str(storage)], returncode=0)
+
+    with pytest.raises(RuntimeError, match="Refusing to use invalid PostgreSQL cluster"):
+        UbuntuDebuginfod(tmp_path).relocate_postgres_storage()
+
+    assert not cluster.is_symlink()
+    assert (dst / "pg_control").read_text() == "original cluster"
+    assert fake_process.call_count(["systemctl", fake_process.any()]) == 0
+
+
 def test_relocate_postgres_storage_skips_without_mount(fake_process, tmp_path):
     cluster = tmp_path / "var/lib/postgresql/18/main"
     cluster.mkdir(parents=True)
@@ -376,14 +427,17 @@ def test_restart_reconciles_downloader_workers(fake_process, unit):
 
     UbuntuDebuginfod(Path("/")).restart(unit=unit, config=config)
 
-    assert fake_process.call_count(
-        [
-            "systemctl",
-            "disable",
-            "--now",
-            "ubuntu-debuginfod-launchpad-downloader@3.service",
-        ]
-    ) == 1
+    assert (
+        fake_process.call_count(
+            [
+                "systemctl",
+                "disable",
+                "--now",
+                "ubuntu-debuginfod-launchpad-downloader@3.service",
+            ]
+        )
+        == 1
+    )
     for worker in (1, 2):
         service = f"ubuntu-debuginfod-launchpad-downloader@{worker}.service"
         assert fake_process.call_count(["systemctl", "enable", service]) == 1
@@ -474,8 +528,6 @@ def test_secret_changed_refreshes_launchpad_credentials(mock_chown, fake_process
     assert stat.S_IMODE(credentials_path.stat().st_mode) == 0o600
 
 
-
-
 def test_stop_success(
     fake_process,  # fixture from pytest-process
     ctx,
@@ -494,7 +546,7 @@ def test_stop_success(
     os.environ["JUJU_CHARM_PREFIX"] = str(tmp_path)
 
     # run juju install hook
-    state = State(leader=True, config = {"sync_launchpad": True})
+    state = State(leader=True, config={"sync_launchpad": True})
     out = ctx.run(ctx.on.stop(), state)
 
     assert isinstance(out.unit_status, BlockedStatus)
@@ -521,6 +573,7 @@ def test_create_new_file_with_content(tmp_path: Path):
     assert file.is_file()
     assert file.read_text() == content
 
+
 def test_create_directory_and_file(tmp_path: Path):
     """Tests creating parent directories when mkdir=True."""
     file = tmp_path / "new_dir" / "test.file"
@@ -532,6 +585,7 @@ def test_create_directory_and_file(tmp_path: Path):
     assert file.is_file()
     assert file.read_text() == content
 
+
 def test_overwrite_existing_file_without_matcher(tmp_path: Path):
     """Tests overwriting a file when content differs and no matcher is used."""
     file = tmp_path / "test.file"
@@ -541,6 +595,7 @@ def test_overwrite_existing_file_without_matcher(tmp_path: Path):
     file_ensure_content(file, new_content)
 
     assert file.read_text() == new_content
+
 
 def test_do_nothing_if_content_unchanged(tmp_path: Path):
     """Tests that the file is untouched if content already matches."""
@@ -580,6 +635,7 @@ def test_replace_content_with_matcher(tmp_path: Path):
 
     assert file.read_text() == "user=guest\nlevel=2\n"
 
+
 def test_append_if_matcher_fails_and_append_is_true(tmp_path: Path):
     """Tests appending content if matcher doesn't find a match (default)."""
     file = tmp_path / "settings.file"
@@ -595,6 +651,7 @@ def test_append_if_matcher_fails_and_append_is_true(tmp_path: Path):
 
     expected_content = "mode=auto\nfeature_enabled=true\n"
     assert file.read_text() == expected_content
+
 
 def test_overwrite_if_matcher_fails_and_append_is_false(tmp_path: Path):
     """Tests overwriting the file if matcher fails and append_missing is False."""
@@ -613,6 +670,7 @@ def test_overwrite_if_matcher_fails_and_append_is_false(tmp_path: Path):
 
     assert file.read_text() == new_content
 
+
 def test_matcher_without_replace_raises_error(tmp_path: Path):
     """Tests that matcher requires replace."""
     file = tmp_path / "test.file"
@@ -621,8 +679,9 @@ def test_matcher_without_replace_raises_error(tmp_path: Path):
     with pytest.raises(ValueError):
         file_ensure_content(file, "new data", matcher="some")
 
-@patch('shutil.chown')
-@patch('charmlibs.pathops.LocalPath.owner', return_value='root')
+
+@patch("shutil.chown")
+@patch("charmlibs.pathops.LocalPath.owner", return_value="root")
 def test_chown_is_called_when_owner_differs(mock_owner, mock_chown, tmp_path):
     """Tests that shutil.chown is called if the file owner is different."""
     file = tmp_path / "test.file"

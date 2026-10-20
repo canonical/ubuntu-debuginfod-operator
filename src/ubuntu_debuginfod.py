@@ -25,7 +25,6 @@ basedir = Path(__file__).parent.parent
 logger = logging.getLogger(__name__)
 
 
-
 POSTGRES_DATA_DIR = "var/lib/postgresql"
 DEBUGDB_STORAGE_DIR = "srv/debug-db"
 
@@ -109,9 +108,7 @@ class UbuntuDebuginfod:
         if not role_can_login:
             run_check("runuser -u postgres -- createuser --login mirror")
         elif role_can_login != "t":
-            run_check(
-                "runuser -u postgres -- psql -v ON_ERROR_STOP=1 -c \"alter role mirror login\" postgres"
-            )
+            run_check('runuser -u postgres -- psql -v ON_ERROR_STOP=1 -c "alter role mirror login" postgres')
 
         database_exists = run_out(
             "runuser -u postgres -- psql -tAc "
@@ -142,6 +139,13 @@ class UbuntuDebuginfod:
         if not clusters:
             return
 
+        for cluster in clusters:
+            dst = storage / cluster.parent.name / cluster.name
+            if dst.exists() and any(dst.iterdir()):
+                version = dst / "PG_VERSION"
+                if not version.is_file() or version.read_text().strip() != cluster.parent.name:
+                    raise RuntimeError(f"Refusing to use invalid PostgreSQL cluster at {dst}")
+
         was_active = run_ret("systemctl is-active postgresql.service") == 0
         if was_active:
             run_check("systemctl stop postgresql.service")
@@ -150,8 +154,9 @@ class UbuntuDebuginfod:
             # <version>/main directly on the volume, so a future postgres major
             # upgrade creates its cluster as a sibling (pg_upgradecluster).
             dst = storage / cluster.parent.name / cluster.name
-            dst.mkdir(parents=True, exist_ok=True)
-            run_check(f"rsync -aHAX {shlex.quote(str(cluster))}/ {shlex.quote(str(dst))}/")
+            if not (dst / "PG_VERSION").is_file():
+                dst.mkdir(parents=True, exist_ok=True)
+                run_check(f"rsync -aHAX {shlex.quote(str(cluster))}/ {shlex.quote(str(dst))}/")
             backup = cluster.with_name(cluster.name + ".pre-relocate")
             shutil.move(cluster, backup)
             file_link(dst, cluster)
@@ -167,10 +172,7 @@ class UbuntuDebuginfod:
     def _downloader_services(config: Config) -> set[str]:
         if not config.download:
             return set()
-        return {
-            DOWNLOADER_SERVICE_TEMPLATE.format(worker=worker)
-            for worker in range(1, config.downloader_workers + 1)
-        }
+        return {DOWNLOADER_SERVICE_TEMPLATE.format(worker=worker) for worker in range(1, config.downloader_workers + 1)}
 
     @staticmethod
     def _enabled_downloader_services() -> set[str]:
@@ -335,6 +337,6 @@ class UbuntuDebuginfod:
         if run_ret("systemctl is-active ubuntu-debuginfod-launchpad-cleaner.timer") != 0:
             return False
         # polling is independent of downloading
-        return not config.sync_launchpad or run_ret(
-            "systemctl is-active ubuntu-debuginfod-launchpad-poller.service"
-        ) == 0
+        return (
+            not config.sync_launchpad or run_ret("systemctl is-active ubuntu-debuginfod-launchpad-poller.service") == 0
+        )
